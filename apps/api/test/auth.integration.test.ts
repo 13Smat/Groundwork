@@ -446,6 +446,14 @@ describe("auth and workspaces", () => {
     });
     expect(second.statusCode, second.body).toBe(200);
     expect(second.json().features).toEqual({ onboarding_complete: true, ai_assist: true });
+    const cleared = await requireApp().inject({
+      method: "PATCH",
+      url: `/workspaces/${workspace.id}`,
+      headers,
+      payload: { features: {} },
+    });
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    expect(cleared.json().features).toEqual({});
   });
 
   it("sends a magic link through the mailer", async () => {

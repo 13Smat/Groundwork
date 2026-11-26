@@ -186,12 +186,16 @@ function asRecord(value: unknown): Record<string, unknown> {
 /**
  * Feature flags are a map of booleans. A patch changes the keys it names and
  * leaves the others in place, so saving `ai_assist` does not clear
- * `onboarding_complete`.
+ * `onboarding_complete`. An empty object clears the map. Callers turn every
+ * flag off that way, including `ai_assist`.
  */
 function mergeFeatureFlags(
   current: unknown,
   patch: Record<string, boolean>,
 ): Record<string, boolean> {
+  if (Object.keys(patch).length === 0) {
+    return {};
+  }
   const next: Record<string, boolean> = {};
   for (const [key, value] of Object.entries(asRecord(current))) {
     if (typeof value === "boolean") {

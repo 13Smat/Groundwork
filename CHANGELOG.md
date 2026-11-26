@@ -5,7 +5,7 @@
 ### MVP hardening 1 — Onboarding, demo seed, and the full-slice check
 
 - The office opens `/onboarding` after a workspace is created. The steps are the company profile, imperial or metric units with a timezone, and one click that loads the existing starter pack. Finish and skip set `features.onboarding_complete`. A second load skips rows that are already there. ADR 0022. No migration.
-- `PATCH /workspaces/:id` merges feature flags. Saving `ai_assist` leaves `onboarding_complete` in place. The auth test covers that.
+- `PATCH /workspaces/:id` merges feature flags. Saving `ai_assist` leaves `onboarding_complete` in place. An empty `features` object clears the map, so assist can still be turned off. The auth test covers both.
 - `pnpm db:seed` connects as `groundwork_app` and seeds `db/seed/demo.json`: Cedar Ridge Paving, two clients, two locations inside the fixture COG, the starter catalog and recipes, and one job. A second run does not add rows. `pnpm test:seed` covers that. The seed does not upload the COG and does not create a password.
 - Playwright walks sign-up, setup, an address-first job, a manual polygon, an estimate, a proposal PDF, the public optional item, the fake signature, and a won job with a ready work order. `@axe-core/playwright` asserts no serious or critical violations on those screens and on the core office screens. The keyboard-help dialog and a catalog drawer keep focus inside the dialog.
 - Go-live gate: do not enable `DropboxSignProvider` until each signed or declined webhook is confirmed by fetching the signature request from the Dropbox Sign API. `event_hash` does not cover the body. ADR 0021.
