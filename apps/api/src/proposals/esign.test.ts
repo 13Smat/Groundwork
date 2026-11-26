@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { LOCAL_ESIGN_WEBHOOK_SECRET, readEsignWebhookSecret } from "../config.js";
 import { FakeEsignProvider, createEsignProvider, signFakeBody } from "./esign.js";
 import { resetPublicRateLimit, setPublicRateLimit, takePublicCall } from "./rate-limit.js";
-import { timingSafeEqualHex } from "./token.js";
+import { hashPublicToken, hashPublicTokenForLookup, timingSafeEqualHex } from "./token.js";
 
 const env = { ...process.env };
 
@@ -14,6 +14,14 @@ afterEach(() => {
 });
 
 describe("esign fakes", () => {
+  it("hashes a public token before lookup, including a short or oversized value", () => {
+    const issued = "a".repeat(43);
+    expect(hashPublicTokenForLookup(issued)).toBe(hashPublicToken(issued));
+    expect(hashPublicTokenForLookup("short")).toBe(hashPublicToken("short"));
+    expect(hashPublicTokenForLookup("z".repeat(500))).toBe(hashPublicToken("z".repeat(200)));
+    expect(hashPublicTokenForLookup("short")).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it("compares hex digests and still hashes when the lengths differ", () => {
     expect(timingSafeEqualHex("aa", "aa")).toBe(true);
     expect(timingSafeEqualHex("aa", "ab")).toBe(false);

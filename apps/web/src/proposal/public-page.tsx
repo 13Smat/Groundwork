@@ -46,10 +46,7 @@ export function PublicProposalPage({ token }: { token: string }) {
   if (proposal.isError || !proposal.data) {
     return (
       <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-        <h1 className="text-2xl font-semibold">Proposal</h1>
-        <p role="alert" className="text-accent">
-          {message(proposal.error, "That proposal link is not available.")}
-        </p>
+        <h1 className="text-2xl font-semibold">This link isn't available.</h1>
       </main>
     );
   }

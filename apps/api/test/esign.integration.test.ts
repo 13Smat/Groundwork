@@ -20,6 +20,7 @@ import {
 } from "../src/proposals/esign.js";
 import type { ProposalFiles } from "../src/proposals/files.js";
 import { resetPublicRateLimit, setPublicRateLimit } from "../src/proposals/rate-limit.js";
+import { hashPublicToken } from "../src/proposals/token.js";
 import { workspaceStorageKey } from "../src/storage/s3.js";
 
 const PASSWORD = "correct-horse-battery";
@@ -129,6 +130,16 @@ function cookieFrom(response: { headers: Record<string, unknown> }): string {
     throw new Error("The response did not set a session cookie.");
   }
   return cookie;
+}
+
+function comparablePublicResponse(response: {
+  statusCode: number;
+  body: string;
+  headers: Record<string, unknown>;
+}): { statusCode: number; body: string; headers: Record<string, unknown> } {
+  const headers = { ...response.headers };
+  delete headers.date;
+  return { statusCode: response.statusCode, body: response.body, headers };
 }
 
 function headers(cookie: string, workspaceId: string, json = true): Record<string, string> {
@@ -461,7 +472,7 @@ describe("proposal e-sign", () => {
     expect(text).not.toContain("x-esign-signature");
   });
 
-  it("returns 410 for a voided, expired, or superseded link", async () => {
+  it("returns one 404 for an unknown, voided, expired, superseded, or used link", async () => {
     const owner = await signUp("Gone");
     const workspaceId = await createWorkspace(owner.cookie, "Gone Co");
     const proposal = await draftProposal(owner.cookie, workspaceId);
@@ -475,6 +486,33 @@ describe("proposal e-sign", () => {
     expect(logs.join("\n")).not.toContain(token);
     expect(logs.join("\n")).toContain("[redacted]");
 
+    const unknownToken = "not-a-real-token-value-here";
+    logs.length = 0;
+    const unknown = await requireApp().inject({
+      method: "GET",
+      url: `/public/proposals/${unknownToken}`,
+    });
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json()).toEqual({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      detail: "This link isn't available.",
+      instance: "/public/proposals/{token}",
+    });
+    expect(String(unknown.headers["content-type"])).toContain("application/problem+json");
+    expect(unknown.body).not.toContain(unknownToken);
+    const unknownLog = logs.join("\n");
+    expect(unknownLog).toContain('"reason":"unknown"');
+    expect(unknownLog).not.toContain(unknownToken);
+    expect(unknownLog).not.toContain(hashPublicToken(unknownToken));
+
+    const short = await requireApp().inject({
+      method: "GET",
+      url: "/public/proposals/short-token",
+    });
+    expect(comparablePublicResponse(short)).toEqual(comparablePublicResponse(unknown));
+
     const voided = await requireApp().inject({
       method: "POST",
       url: `/proposals/${proposal.proposalId}/void`,
@@ -482,11 +520,44 @@ describe("proposal e-sign", () => {
       payload: {},
     });
     expect(voided.statusCode, voided.body).toBe(200);
+    const hash = await requireAdmin().query<{ token_hash: string }>(
+      "select token_hash from proposal_token where proposal_id = $1",
+      [proposal.proposalId],
+    );
+    const tokenHash = hash.rows[0]?.token_hash;
+    if (!tokenHash) {
+      throw new Error("The voided proposal has no token hash.");
+    }
+    logs.length = 0;
     const closed = await requireApp().inject({
       method: "GET",
       url: `/public/proposals/${token}`,
     });
-    expect(closed.statusCode).toBe(410);
+    expect(closed.body).toBe(unknown.body);
+    expect(Buffer.compare(closed.rawPayload, unknown.rawPayload)).toBe(0);
+    expect(comparablePublicResponse(closed)).toEqual(comparablePublicResponse(unknown));
+    const voidLog = logs.join("\n");
+    expect(voidLog).toContain('"reason":"void"');
+    expect(voidLog).not.toContain(token);
+    expect(voidLog).not.toContain(tokenHash);
+
+    const closedPost = await requireApp().inject({
+      method: "POST",
+      url: `/public/proposals/${token}`,
+      headers: { "content-type": "application/json" },
+      payload: { selected_optional_line_ids: [] },
+    });
+    expect(closedPost.body).toBe(unknown.body);
+    expect(comparablePublicResponse(closedPost)).toEqual(comparablePublicResponse(unknown));
+
+    const closedSign = await requireApp().inject({
+      method: "POST",
+      url: `/public/proposals/${token}/sign`,
+      headers: { "content-type": "application/json" },
+      payload: {},
+    });
+    expect(closedSign.body).toBe(unknown.body);
+    expect(comparablePublicResponse(closedSign)).toEqual(comparablePublicResponse(unknown));
 
     const expired = await draftProposal(owner.cookie, workspaceId);
     await markRendered(expired.proposalId, workspaceId);
@@ -498,11 +569,14 @@ describe("proposal e-sign", () => {
     await requireAdmin().query("update proposal set expires_at = '2000-01-01' where id = $1", [
       expired.proposalId,
     ]);
+    logs.length = 0;
     const past = await requireApp().inject({
       method: "GET",
       url: `/public/proposals/${expiredToken}`,
     });
-    expect(past.statusCode).toBe(410);
+    expect(past.body).toBe(unknown.body);
+    expect(logs.join("\n")).toContain('"reason":"expired"');
+    expect(logs.join("\n")).not.toContain(expiredToken);
 
     const superseded = await draftProposal(owner.cookie, workspaceId);
     await markRendered(superseded.proposalId, workspaceId);
@@ -518,11 +592,45 @@ describe("proposal e-sign", () => {
       payload: {},
     });
     expect(version.statusCode, version.body).toBe(201);
-    const gone = await requireApp().inject({
+    logs.length = 0;
+    const replacedEstimate = await requireApp().inject({
       method: "GET",
       url: `/public/proposals/${supersededToken}`,
     });
-    expect(gone.statusCode).toBe(410);
+    expect(replacedEstimate.body).toBe(unknown.body);
+    expect(logs.join("\n")).toContain('"reason":"superseded"');
+    expect(logs.join("\n")).not.toContain(supersededToken);
+
+    const rotated = await draftProposal(owner.cookie, workspaceId);
+    await markRendered(rotated.proposalId, workspaceId);
+    const firstToken = await issueLink(owner.cookie, workspaceId, rotated.proposalId);
+    const secondToken = await issueLink(owner.cookie, workspaceId, rotated.proposalId);
+    expect(secondToken).not.toBe(firstToken);
+    logs.length = 0;
+    const used = await requireApp().inject({
+      method: "GET",
+      url: `/public/proposals/${firstToken}`,
+    });
+    expect(used.body).toBe(unknown.body);
+    expect(logs.join("\n")).toContain('"reason":"unknown"');
+    expect(logs.join("\n")).not.toContain(firstToken);
+    expect(logs.join("\n")).not.toContain(hashPublicToken(firstToken));
+
+    await requireAdmin().query(
+      "update proposal set public_token_hash = $2 where id = $1 and status = 'rendered'",
+      [rotated.proposalId, "ab".repeat(32)],
+    );
+    logs.length = 0;
+    const stale = await requireApp().inject({
+      method: "GET",
+      url: `/public/proposals/${secondToken}`,
+    });
+    expect(stale.body).toBe(unknown.body);
+    const staleLog = logs.join("\n");
+    expect(staleLog).toContain('"reason":"used"');
+    expect(staleLog).not.toContain(secondToken);
+    expect(staleLog).not.toContain(hashPublicToken(secondToken));
+    expect(staleLog).not.toContain("ab".repeat(32));
   });
 
   it("re-renders the chosen optional item before the envelope exists", async () => {

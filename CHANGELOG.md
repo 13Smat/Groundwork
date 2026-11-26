@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Public token 404 parity and the WITH CHECK audit
+
+- `GET` and `POST /public/proposals/:token`, and `POST /public/proposals/:token/sign`, return one 404 problem+json for an unknown token, a voided proposal, an expired proposal, a superseded estimate, and a token that no longer matches the proposal hash. `type` is `about:blank`, `title` is `Not Found`, `detail` is `This link isn't available.`, and `instance` is `/public/proposals/{token}`. The body and the headers do not say which case it was. ADR 0024 supersedes the 410 in ADR 0021. The handler hashes the token and looks it up before it decides. A value longer than 200 characters is hashed from a prefix. The server log records `unknown`, `void`, `expired`, `superseded`, or `used` and does not include the token or its hash. A replaced link deletes the old row, so that token is `unknown`.
+- The public page shows one heading, `This link isn't available.`, for every failed load. It does not repeat the response detail.
+- The public token parameter no longer has `minLength` or `maxLength`. A short token takes the same 404. The OpenAPI differ does not treat that as breaking. `info.version` stays `0.0.0`.
+- `pnpm test:rls` requires every INSERT, UPDATE, and ALL policy on a table with `workspace_id NOT NULL` to have a WITH CHECK that names `app.workspace_id`. A WITH CHECK that is only `current_user = 'groundwork_auth'` is allowed on `member` and `invitation`. ADR 0007 and ADR 0023. The live policies already pass. There is no migration `0019`.
+- The same audit fails a token column on `proposal` or `proposal_token` other than `public_token_hash` and `token_hash`. Both checks stay `^[0-9a-f]{64}$`.
+
 ### MVP hardening 2 — OpenAPI drift, tenant 404 sweep, and the error contract
 
 - `apps/api/openapi.json` is committed. `pnpm openapi:write` regenerates it and `pnpm openapi:check` fails when the file is stale. On a pull request, a removed path or operation, a removed or newly required field, or a narrowed type fails unless `info.version` is bumped. The differ is in-repo and has fixtures for a breaking change and a compatible change. ADR 0023. The file is ignored by Prettier so the generator's bytes stay the check.
