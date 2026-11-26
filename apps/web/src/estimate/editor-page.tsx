@@ -122,6 +122,16 @@ export function EstimateEditorPage({ jobId, estimateId }: { jobId: string; estim
           <Button type="button" variant="secondary" onClick={() => setVersionsOpen(true)}>
             Versions
           </Button>
+          {row.status === "ready" || row.status === "sent" ? (
+            <Button asChild variant="secondary">
+              <Link
+                to="/jobs/$jobId/estimates/$estimateId/proposal"
+                params={{ jobId, estimateId: row.id }}
+              >
+                Build proposal
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </header>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">

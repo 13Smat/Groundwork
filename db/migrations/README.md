@@ -19,3 +19,5 @@ A new tenant table enables and forces row level security in its own migration, g
 `0011_estimating.sql` adds `estimate` and `line_item`. Both use the foundations policy and are granted to `groundwork_app` only. `0010` stays reserved for the map takeoff follow-up. ADR 0015.
 
 `0012_detection.sql` adds `detection_run` and `detection_feature`. Both tables use the foundations policy and are granted to `groundwork_app` only. `usage_event` already exists in `0001` and is not recreated. ADR 0016. Accepting a draft reuses those statuses and `accepted_measurement_id`. There is no `0014` migration. `0013` stays reserved for the map takeoff follow-up. Estimating part 2 added no migration. ADR 0018.
+
+`0016_proposals.sql` adds `proposal_template`, `proposal`, and `signature`. All three use the foundations policy and are granted to `groundwork_app` only. `0007`, `0008`, `0010`, and `0013` through `0015` stay unused. pg-boss already owns the `pgboss` schema. ADR 0020.

@@ -9,6 +9,8 @@ const logger = createLogger("worker");
 const { startQueue } = await import("./queue.js");
 const { createDb, createPool } = await import("./db/client.js");
 const { registerImageryIngestWorker } = await import("./imagery/queue.js");
+const { registerProposalRenderWorker } = await import("./proposals/queue.js");
+const { closeProposalBrowser } = await import("./proposals/pdf.js");
 
 let stopping = false;
 
@@ -18,6 +20,7 @@ async function shutdown(boss: Awaited<ReturnType<typeof startQueue>>): Promise<v
   }
   stopping = true;
   logger.info("worker stopping");
+  await closeProposalBrowser();
   await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   await telemetry.shutdown();
 }
@@ -28,7 +31,9 @@ try {
   const boss = await startQueue(databaseUrl, (error) => {
     logger.error({ err: error }, "pg-boss error");
   });
-  await registerImageryIngestWorker(boss, createDb(appPool));
+  const tenantDb = createDb(appPool);
+  await registerImageryIngestWorker(boss, tenantDb);
+  await registerProposalRenderWorker(boss, tenantDb);
   logger.info({ database: redactDatabaseUrl(databaseUrl) }, "worker ready");
   const stop = async (): Promise<void> => {
     await shutdown(boss);

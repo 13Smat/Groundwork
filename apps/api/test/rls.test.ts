@@ -28,6 +28,9 @@ const TENANT_TABLES = [
   "line_item",
   "detection_run",
   "detection_feature",
+  "proposal_template",
+  "proposal",
+  "signature",
 ] as const;
 const AUTH_TABLES = [
   "app_user",
@@ -361,6 +364,16 @@ describe("row level security", () => {
 
   it("starts the pg-boss worker against the owner database", async () => {
     const boss = await startQueue(readDatabaseUrl(), () => undefined);
+    const schema = await requireAdmin().query<{ owner: string; app_usage: boolean }>(`
+      select r.rolname as owner,
+             has_schema_privilege('groundwork_app', n.nspname, 'usage') as app_usage
+      from pg_namespace n
+      join pg_roles r on r.oid = n.nspowner
+      where n.nspname = 'pgboss'
+    `);
+    expect(schema.rows[0]?.owner).not.toBe("groundwork_app");
+    expect(schema.rows[0]?.owner).not.toBe("groundwork_auth");
+    expect(schema.rows[0]?.app_usage).toBe(false);
     await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   });
 
@@ -702,6 +715,57 @@ describe("imagery row level security", () => {
     }
   });
 
+  it("rejects an illegal proposal transition and grants proposal tables to the app role only", async () => {
+    const fn = await requireAdmin().query<{ prosecdef: boolean }>(
+      "select prosecdef from pg_proc where proname = 'proposal_before_update'",
+    );
+    expect(fn.rows[0]?.prosecdef).toBe(false);
+    const pin = await requireAdmin().query<{ prosecdef: boolean }>(
+      "select prosecdef from pg_proc where proname = 'proposal_pin_estimate'",
+    );
+    expect(pin.rows[0]?.prosecdef).toBe(false);
+    for (const table of ["proposal_template", "proposal", "signature"]) {
+      const priv = await requireAdmin().query<{ app: boolean; auth: boolean }>(
+        `select has_table_privilege('groundwork_app', $1, 'select') as app,
+                has_table_privilege('groundwork_auth', $1, 'select') as auth`,
+        [`public.${table}`],
+      );
+      expect(priv.rows[0]?.app).toBe(true);
+      expect(priv.rows[0]?.auth).toBe(false);
+    }
+    const client = await requireApp().connect();
+    try {
+      await client.query("begin");
+      const workspace = createId();
+      const job = createId();
+      const estimate = createId();
+      const proposal = createId();
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspace]);
+      await client.query(
+        `insert into job (id, workspace_id, number, name, stage)
+         values ($1, $2, 'J-9', 'A', 'lead')`,
+        [job, workspace],
+      );
+      await client.query(
+        `insert into estimate (id, workspace_id, job_id, number, status)
+         values ($1, $2, $3, 'E-9', 'draft')`,
+        [estimate, workspace, job],
+      );
+      await client.query(
+        `insert into proposal (
+           id, workspace_id, estimate_id, number, public_token_hash, estimate_version, snapshot
+         ) values ($1, $2, $3, 'P-9', repeat('ef', 32), 1, '{"lines":[]}'::jsonb)`,
+        [proposal, workspace, estimate],
+      );
+      await expect(
+        client.query("update proposal set status = 'signed' where id = $1", [proposal]),
+      ).rejects.toThrow(/illegal proposal transition from draft to signed/);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+  });
+
   it("rejects a ready capture moving to failed", async () => {
     const client = await requireAdmin().connect();
     try {
@@ -746,6 +810,9 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     line_item: { a: createId(), b: createId() },
     detection_run: { a: createId(), b: createId() },
     detection_feature: { a: createId(), b: createId() },
+    proposal_template: { a: createId(), b: createId() },
+    proposal: { a: createId(), b: createId() },
+    signature: { a: createId(), b: createId() },
   };
   const takeoffItem = { a: createId(), b: createId() };
   const pool = requireAdmin();
@@ -927,6 +994,34 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
       workspaceB,
       ids.detection_run.b,
     ],
+  );
+  await pool.query(
+    `insert into proposal_template (id, workspace_id, name)
+     values ($1, $2, 'A'), ($3, $4, 'B')`,
+    [ids.proposal_template.a, workspaceA, ids.proposal_template.b, workspaceB],
+  );
+  await pool.query(
+    `insert into proposal (
+       id, workspace_id, estimate_id, template_id, number, public_token_hash,
+       estimate_version, snapshot
+     ) values
+       ($1, $2, $3, $4, 'P-1', repeat('ab', 32), 1, '{"lines":[]}'::jsonb),
+       ($5, $6, $7, $8, 'P-1', repeat('cd', 32), 1, '{"lines":[]}'::jsonb)`,
+    [
+      ids.proposal.a,
+      workspaceA,
+      ids.estimate.a,
+      ids.proposal_template.a,
+      ids.proposal.b,
+      workspaceB,
+      ids.estimate.b,
+      ids.proposal_template.b,
+    ],
+  );
+  await pool.query(
+    `insert into signature (id, workspace_id, proposal_id, signer_name)
+     values ($1, $2, $3, 'A'), ($4, $5, $6, 'B')`,
+    [ids.signature.a, workspaceA, ids.proposal.a, ids.signature.b, workspaceB, ids.proposal.b],
   );
   return ids;
 }

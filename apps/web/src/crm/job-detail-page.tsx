@@ -201,7 +201,11 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
             </Link>
           </li>
           <li>
-            <Link to="/proposals" className="text-base font-semibold underline">
+            <Link
+              to="/jobs/$jobId/proposals"
+              params={{ jobId }}
+              className="text-base font-semibold underline"
+            >
               Proposals
             </Link>
           </li>

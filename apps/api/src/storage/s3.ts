@@ -162,6 +162,7 @@ export const MAX_COG_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 export async function getObject(
   storageKey: string,
   config: ObjectStorageConfig = readObjectStorageConfig(),
+  missingDetail = "That imagery capture has no readable COG.",
 ): Promise<Buffer> {
   assertStorageKey(storageKey);
   const client = createS3Client(config);
@@ -172,7 +173,7 @@ export async function getObject(
     throw new ProblemError({
       status: 409,
       title: "Conflict",
-      detail: "That imagery capture has no readable COG.",
+      detail: missingDetail,
     });
   }
   if (response.ContentLength !== undefined && response.ContentLength > MAX_COG_DOWNLOAD_BYTES) {
@@ -187,7 +188,7 @@ export async function getObject(
     throw new ProblemError({
       status: 409,
       title: "Conflict",
-      detail: "That imagery capture has no readable COG.",
+      detail: missingDetail,
     });
   }
   return Buffer.from(bytes);

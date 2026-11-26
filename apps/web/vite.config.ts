@@ -49,6 +49,8 @@ export default defineConfig({
       "/locations": proxy,
       "/jobs": proxy,
       "/estimates": proxy,
+      "/proposals": proxy,
+      "/proposal-templates": proxy,
       "/line-items": proxy,
       "/takeoffs": proxy,
       "/measurements": proxy,

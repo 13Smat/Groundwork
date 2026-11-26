@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Python venv module
         run: sudo apt-get update && sudo apt-get install -y python3-venv
 
@@ -96,6 +99,9 @@ jobs:
 
       - name: Estimating
         run: pnpm test:estimating
+
+      - name: Proposals
+        run: pnpm test:proposals
 
   e2e:
     name: e2e

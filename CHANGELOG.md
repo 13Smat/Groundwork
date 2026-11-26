@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Spec 08 part 1 — Proposal PDF templates, worker, and preview
+
+- Added `0016_proposals.sql` for `proposal_template`, `proposal`, and `signature`. Tenant row security is forced. `groundwork_app` is the only grantee. The trigger functions are `SECURITY INVOKER`. ADR 0020. pg-boss already owns the `pgboss` schema. This slice does not add a queue. Migrations `0007`, `0008`, `0010`, and `0013` through `0015` stay unused.
+- `Proposal.status` lives in `packages/shared`. `draft -> rendered -> sent -> viewed -> signed`. `sent` or `viewed` may become `declined` or `expired`. Any status other than `signed` may become `void`. Any other change is 409. This slice only moves `draft -> rendered`.
+- A proposal is created from a `ready` or `sent` estimate. It copies that version and snapshot. One non-void proposal can pin an estimate. `ready -> draft` is 409 while a proposal references it. Cloning a version still works. The first proposal number is `P-1001`.
+- `public_token_hash` is the SHA-256 hex of 32 random bytes. The raw token is not stored, not returned, and not written to `audit_log`.
+- `packages/pdf-templates` renders the client document: cover, grouped scope, the `renderSiteMap` PNG, a price table, optional items, terms, a signature block, and the imagery footer. The footer includes `Quantities measured from aerial imagery; field verify.` Cost and margin are not in the HTML. Playwright Chromium prints the HTML from the `proposal.render` job. The PDF is stored with the existing S3 helper. `GET /proposals/:id/pdf` streams it. The builder previews it with pdf.js.
+- Routes: `POST /estimates/:id/proposals`, `GET /estimates/:id/proposals`, `GET /jobs/:id/proposals`, `GET/PATCH /proposals/:id`, `POST /proposals/:id/render`, `GET /proposals/:id/pdf`, `GET/POST /proposal-templates`, `PATCH /proposal-templates/:id`. Mutations write `audit_log`. Office can read and cannot write. The proposal JSON hides cost and margin.
+- The estimate editor links to the builder when the estimate is ready or sent. Playwright covers create, save, render, and a visible preview. `pnpm test` covers a 40-line render under 10 seconds, the attribution text, and the missing cost. `pnpm test:proposals` covers the pin, the token hash, office cost hiding, and cross-tenant row security. No Dropbox Sign account, call, or key. The spec files were not edited.
+
 ### Spec 04 part 3 — Holes, snap, undo, parcels, and export
 
 - Hole, split, and merge edit the polygon the measurement routes already store. A hole is an interior ring, so the live area drops before save and the server still writes `deductions`. Snap is a Terra Draw toggle. Undo and redo are an editor snapshot stack for create, vertex edit, delete, and re-tag, plus hole, split, and merge. A saved delete is local until save. Save calls `DELETE /measurements/:id` for each persisted id that left the map, then PUTs the rest. Undo before that save leaves the row in place. ADR 0017. No migration.

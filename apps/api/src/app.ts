@@ -23,6 +23,7 @@ import { createLogger } from "./logging.js";
 import { registerCatalogRoutes } from "./catalog/routes.js";
 import { registerGroundworkRoutes } from "./routes/groundwork.js";
 import { registerEstimateRoutes } from "./estimating/routes.js";
+import { registerProposalRoutes, type ProposalContext } from "./proposals/routes.js";
 import { registerTakeoffRoutes } from "./takeoff/routes.js";
 
 export async function buildApp(options?: {
@@ -32,6 +33,7 @@ export async function buildApp(options?: {
   imagery?: Omit<ImageryRouteOptions, "db" | "auth" | "adminAuth"> & {
     db?: ImageryRouteOptions["db"];
   };
+  proposals?: Pick<ProposalContext, "dispatch">;
 }) {
   const logger =
     options?.logger === true ? createLogger("api") : options?.logger ? options.logger : undefined;
@@ -100,6 +102,12 @@ export async function buildApp(options?: {
       db,
       authPool: options.database.auth,
       auth,
+    });
+    await registerProposalRoutes(app, {
+      db,
+      authPool: options.database.auth,
+      auth,
+      dispatch: options.proposals?.dispatch,
     });
     await registerImageryRoutes(app, {
       ...options.imagery,
