@@ -50,6 +50,13 @@ async function createJob(
   await expect(page.getByRole("heading", { name: "J-1001" })).toBeVisible();
 }
 
+async function expectMapReady(page: Page): Promise<void> {
+  const ready = page.getByText("Map ready");
+  const failed = page.getByText("The map could not start.");
+  await expect(ready.or(failed)).toBeVisible({ timeout: 30_000 });
+  await expect(failed).toHaveCount(0);
+}
+
 async function clickMap(page: Page, x: number, y: number): Promise<void> {
   const canvas = page.getByLabel("Takeoff drawing surface");
   await canvas.scrollIntoViewIfNeeded();
@@ -68,9 +75,10 @@ test("draw a polygon, line, and point, then switch imagery", async ({ page }) =>
 
   await page.getByRole("tab", { name: "Takeoffs" }).click();
   await expect(page.getByRole("heading", { name: "Takeoffs" })).toBeVisible();
+  await expect(page.getByText("No takeoffs yet.")).toBeVisible();
   await page.getByRole("button", { name: "New takeoff" }).click();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expect(page.getByText("Map ready")).toBeVisible();
+  await expectMapReady(page);
 
   const options = page.getByLabel("Imagery capture").locator("option");
   await expect(options.first()).toContainText("Helene 2025");
@@ -122,7 +130,7 @@ test("draw a polygon, line, and point, then switch imagery", async ({ page }) =>
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expect(page.getByText("Map ready")).toBeVisible();
+  await expectMapReady(page);
   await expect(page.getByText("Server total 1", { exact: true })).toBeVisible();
 
   await page.getByLabel("Imagery capture").selectOption({ label: /NC Ortho · 2024-03-15/ });
@@ -138,6 +146,11 @@ test("draw a polygon, line, and point, then switch imagery", async ({ page }) =>
   );
   await expect(page.getByText(/different capture/)).toBeVisible();
   await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to job" }).click();
+  await expect(page.getByRole("tab", { name: "Takeoffs" })).toBeVisible();
+  await page.getByRole("tab", { name: "Takeoffs" }).click();
+  await expect(page.getByRole("button", { name: "Version 1, Draft" })).toBeVisible();
 });
 
 test("measuring stays blocked when no allowed capture covers the site", async ({ page }) => {
@@ -161,7 +174,7 @@ test("a site outside North Carolina shows the NAIP banner", async ({ page }) => 
   await expect(page.getByText("USDA NAIP")).toBeVisible();
   await page.getByRole("button", { name: "New takeoff" }).click();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expect(page.getByText("Map ready")).toBeVisible();
+  await expectMapReady(page);
   const labels = await page.getByLabel("Imagery capture").locator("option").allTextContents();
   expect(labels.join("\n")).toMatch(/NAIP/);
   expect(labels.join("\n")).not.toMatch(/Helene|NC Ortho/);

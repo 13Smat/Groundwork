@@ -10,12 +10,12 @@ Spec 04 part 2 draws measurements on license-cleared imagery. Map Takeoff 1 alre
 
 Spec 04 does not name a list of takeoffs for a job. The capture list, the age and seamline warnings, and the confirm rule already come from the API. Tile requests go through `/imagery/tiles/:captureId/{z}/{x}/{y}`. A capture with `allows_tracing = false` or a null `verified_at` is not in that list and is 403 from the tile route. Helene and the older NC orthos have no COG in this environment, so those tiles 404. The e2e job does not run TiTiler, so a fixture tile can 502.
 
-Estimating 1 has migration `0011` and ADR 0015. AI Assist 1 has migration `0012` and ADR 0016. This slice does not need a table change.
+Estimating 1 has migration `0011` and ADR 0015. AI Assist 1 shipped migration `0012` and ADR 0016. This slice does not need a table change.
 
 ## Decision
 
 - The editor is a lazy route at `/jobs/$jobId/takeoffs/$takeoffId`. MapLibre, Terra Draw, and the map stylesheet stay out of the office bundle. `/catalog/takeoff` stays the takeoff-item screen. `/takeoff` stays the office placeholder.
-- The job page gains a Takeoffs tab and points its Takeoffs link at `/jobs/$jobId/takeoffs`. That page creates an aerial takeoff with `POST /jobs/:id/takeoffs` on the first allowed capture. Ids created in this browser are remembered in `sessionStorage`. There is no new list route.
+- The job page gains a Takeoffs tab and points its Takeoffs link at `/jobs/$jobId/takeoffs`. That page creates an aerial takeoff with `POST /jobs/:id/takeoffs` on the first allowed capture. `GET /jobs/:id/takeoffs` lists the latest version of each lineage, newest first, with status, version, capture, and `updated_at`. The same session and membership guard as the other takeoff reads applies, and row security hides other tenants. No new table.
 - Terra Draw modes are select, polygon, linestring, point, and a second linestring named `ruler`. The ruler is not included in `PUT /takeoffs/:id/measurements`. Leaving the ruler removes those features. New ids use the shared UUIDv7 `idStrategy`, because the API rejects a v4 id.
 - The parcel and the site pin are MapLibre GeoJSON layers. They are not Terra Draw features, so they cannot be saved and they do not clip a measurement.
 - Switching the capture calls `RasterTileSource.setTiles`. The map is not rebuilt, so drawings stay. When the takeoff already has measurements, or the editor has unsaved ones, the office asks before `PATCH` with `confirm: true`.
@@ -25,7 +25,7 @@ Estimating 1 has migration `0011` and ADR 0015. AI Assist 1 has migration `0012`
 
 ## Alternatives
 
-- Add `GET /jobs/:id/takeoffs`. Rejected. Spec 04 does not name it, and a session list is enough to reopen a takeoff created in this browser. The gap is in `docs/specs/OPEN-QUESTIONS.md`.
+- Remember ids in `sessionStorage` and skip a list route. Rejected. A takeoff created in another browser would disappear, and the browser is not the source of truth. The list reads the existing `takeoff` table.
 - Put the parcel in the Terra Draw store as a locked feature. Rejected. A locked feature can still be selected and would have to be filtered out of every save.
 - Rebuild the map style when the capture changes. Rejected. `setStyle` drops the parcel and the drawing.
 - Wait for tile pixels before enabling draw. Rejected. Helene has no COG here, and e2e has no TiTiler. The drawing is geographic and the server measures it.
@@ -33,10 +33,10 @@ Estimating 1 has migration `0011` and ADR 0015. AI Assist 1 has migration `0012`
 
 ## Consequences
 
-- A takeoff created in another browser is not listed. The editor URL still opens it.
+- The Takeoffs tab reads `GET /jobs/:id/takeoffs`. The editor URL still opens one takeoff.
 - Tiles for Helene and the seeded NC orthos 404 until those COGs exist. The paper background shows through. Drawing and save still work.
 - Holes, snap, undo/redo, PNG export, and multi-parcel select stay in part 3. The ruler is the only measure-only tool in this slice.
-- ADR 0015 and ADR 0016 stay reserved. The next free number is 0017.
+- ADR 0015 stays reserved for estimating. ADR 0016 is the AI assist decision. The next free number is 0017.
 
 ## References
 

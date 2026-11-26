@@ -75,6 +75,7 @@ const TENANT_ROUTES = [
   "get /search",
   "get /pipeline/summary",
   "post /jobs/{id}/takeoffs",
+  "get /jobs/{id}/takeoffs",
   "get /takeoffs/{id}",
   "patch /takeoffs/{id}",
   "get /takeoffs/{id}/measurements",

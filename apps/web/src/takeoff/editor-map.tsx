@@ -295,8 +295,11 @@ export function TakeoffMap({
           },
         });
         mapRef.current = map;
-        map.on("error", () => {
-          // A missing tile is not a drawing failure. Attribution stays in the page.
+        map.on("error", (event) => {
+          const detail = event.error instanceof Error ? event.error.message : "";
+          if (/webgl/i.test(detail) && !cancelled) {
+            setStatus("The map could not start.");
+          }
         });
         map.on("load", () => {
           if (cancelled || !map) {

@@ -267,6 +267,45 @@ async function readTakeoff(trx: Trx, takeoffId: string): Promise<TakeoffRecord |
   return result.rows[0];
 }
 
+/** Latest row of each lineage, newest activity first. Row security hides other tenants. */
+export async function listTakeoffsForJob(trx: Trx, jobId: string): Promise<TakeoffRecord[]> {
+  const result = await sql<TakeoffRecord>`
+    select
+      id::text as id,
+      job_id::text as job_id,
+      location_id::text as location_id,
+      lineage_id::text as lineage_id,
+      supersedes_id::text as supersedes_id,
+      kind,
+      imagery_capture_id::text as imagery_capture_id,
+      status,
+      version::int as version,
+      measurement_count::int as measurement_count,
+      created_at,
+      updated_at
+    from (
+      select distinct on (t.lineage_id)
+        t.id,
+        t.job_id,
+        t.location_id,
+        t.lineage_id,
+        t.supersedes_id,
+        t.kind,
+        t.imagery_capture_id,
+        t.status,
+        t.version,
+        (select count(*)::int from measurement m where m.takeoff_id = t.id) as measurement_count,
+        t.created_at,
+        t.updated_at
+      from takeoff t
+      where t.job_id = ${jobId}::uuid
+      order by t.lineage_id, t.version desc
+    ) latest
+    order by updated_at desc, id desc
+  `.execute(trx);
+  return result.rows;
+}
+
 export async function getTakeoff(trx: Trx, takeoffId: string): Promise<TakeoffRecord> {
   const takeoff = await readTakeoff(trx, takeoffId);
   if (!takeoff) {

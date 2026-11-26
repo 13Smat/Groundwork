@@ -76,7 +76,7 @@ describe("takeoff start", () => {
         loading={false}
         creating={false}
         error=""
-        remembered={[]}
+        takeoffs={[]}
         onCreate={() => undefined}
         onOpen={() => undefined}
       />,
@@ -92,7 +92,7 @@ describe("takeoff start", () => {
         loading={false}
         creating={false}
         error=""
-        remembered={[]}
+        takeoffs={[]}
         onCreate={() => undefined}
         onOpen={() => undefined}
       />,
@@ -101,5 +101,21 @@ describe("takeoff start", () => {
       false,
     );
     expect(screen.getByText("NC Collaboratory at UNC Chapel Hill")).toBeTruthy();
+  });
+
+  it("lists each saved takeoff by version and status", () => {
+    render(
+      <TakeoffStart
+        captures={[HELENE]}
+        loading={false}
+        creating={false}
+        error=""
+        takeoffs={[{ id: "018f5a00-0000-7000-8000-000000000201", version: 2, status: "in_review" }]}
+        onCreate={() => undefined}
+        onOpen={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Version 2, In review" })).toBeTruthy();
+    expect(screen.queryByText("No takeoffs yet.")).toBeNull();
   });
 });

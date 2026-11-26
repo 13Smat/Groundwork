@@ -8,16 +8,27 @@ import type { Job, Location } from "../crm/types";
 import { useWorkspace } from "../crm/workspace";
 import { api } from "../session";
 import { allowedCaptures, NO_CAPTURE_MESSAGE, NO_POINT_MESSAGE } from "./imagery";
-import { rememberTakeoff, rememberedTakeoffs } from "./memory";
 import { ImageryNotice } from "./notice";
 import type { ImageryCapture, TakeoffRecord } from "./types";
+
+type ListedTakeoff = Pick<TakeoffRecord, "id" | "version" | "status">;
+
+function statusLabel(status: ListedTakeoff["status"]): string {
+  if (status === "in_review") {
+    return "In review";
+  }
+  if (status === "final") {
+    return "Final";
+  }
+  return "Draft";
+}
 
 export function TakeoffStart({
   captures,
   loading,
   creating,
   error,
-  remembered,
+  takeoffs,
   onCreate,
   onOpen,
 }: {
@@ -25,7 +36,7 @@ export function TakeoffStart({
   loading: boolean;
   creating: boolean;
   error: string;
-  remembered: readonly string[];
+  takeoffs: readonly ListedTakeoff[] | null;
   onCreate: () => void;
   onOpen: (takeoffId: string) => void;
 }) {
@@ -56,24 +67,22 @@ export function TakeoffStart({
       >
         {creating ? "Creating takeoff" : "New takeoff"}
       </Button>
-      {remembered.length > 0 ? (
-        <div>
-          <h4 className="text-base font-semibold">Started in this session</h4>
-          <ul className="mt-2 flex flex-col gap-2" aria-label="Takeoffs started in this session">
-            {remembered.map((id, index) => (
-              <li key={id}>
-                <button
-                  type="button"
-                  className="min-h-11 text-base font-semibold underline"
-                  onClick={() => onOpen(id)}
-                >
-                  Open takeoff {index + 1}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {takeoffs && takeoffs.length > 0 ? (
+        <ul className="flex flex-col gap-2" aria-label="Takeoffs for this job">
+          {takeoffs.map((takeoff) => (
+            <li key={takeoff.id}>
+              <button
+                type="button"
+                className="min-h-11 text-base font-semibold underline"
+                onClick={() => onOpen(takeoff.id)}
+              >
+                Version {takeoff.version}, {statusLabel(takeoff.status)}
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
+      {takeoffs && takeoffs.length === 0 ? <p>No takeoffs yet.</p> : null}
     </div>
   );
 }
@@ -83,7 +92,6 @@ export function TakeoffsPanel({ jobId }: { jobId: string }) {
   const { workspaceId } = useWorkspace();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [remembered, setRemembered] = useState(() => rememberedTakeoffs(jobId));
   const job = useQuery({
     queryKey: ["job", jobId],
     queryFn: () => api<Job>(`/jobs/${jobId}`),
@@ -101,11 +109,17 @@ export function TakeoffsPanel({ jobId }: { jobId: string }) {
       api<{ captures: ImageryCapture[] }>(`/imagery/captures?locationId=${locationId}`),
     enabled: Boolean(workspaceId && locationId && location.data?.point),
   });
+  const takeoffs = useQuery({
+    queryKey: ["job-takeoffs", jobId],
+    queryFn: () => api<{ takeoffs: TakeoffRecord[] }>(`/jobs/${jobId}/takeoffs`),
+    enabled: Boolean(workspaceId),
+  });
 
   const allowed = captures.data ? allowedCaptures(captures.data.captures) : null;
   const waiting =
     !workspaceId ||
     job.isLoading ||
+    takeoffs.isLoading ||
     (Boolean(locationId) && location.isLoading) ||
     (Boolean(location.data?.point) && captures.isLoading);
 
@@ -126,8 +140,6 @@ export function TakeoffsPanel({ jobId }: { jobId: string }) {
           imagery_capture_id: capture.id,
         }),
       });
-      rememberTakeoff(jobId, created.id);
-      setRemembered(rememberedTakeoffs(jobId));
       await navigate({
         to: "/jobs/$jobId/takeoffs/$takeoffId",
         params: { jobId, takeoffId: created.id },
@@ -152,8 +164,15 @@ export function TakeoffsPanel({ jobId }: { jobId: string }) {
       captures={pointError ? null : allowed}
       loading={waiting}
       creating={creating}
-      error={error || (job.isError ? message(job.error, "That job was not found.") : pointError)}
-      remembered={remembered}
+      error={
+        error ||
+        (job.isError
+          ? message(job.error, "That job was not found.")
+          : takeoffs.isError
+            ? message(takeoffs.error, "Could not load takeoffs for this job.")
+            : pointError)
+      }
+      takeoffs={takeoffs.isSuccess ? takeoffs.data.takeoffs : null}
       onCreate={() => {
         void onCreate();
       }}
