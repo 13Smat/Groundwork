@@ -10,7 +10,7 @@ export type MeasurementKind = z.infer<typeof measurementKindSchema>;
 
 /**
  * Human number prefixes from spec 00 (`J-1001`, `E-1001`, `P-1001`, `INV-1001`).
- * The counters table that issues the sequence is still an open question.
+ * The counters table stores the sequence. The start value is still an open question.
  */
 export const humanNumberPrefixSchema = z.enum(["J", "E", "P", "INV"]);
 export type HumanNumberPrefix = z.infer<typeof humanNumberPrefixSchema>;

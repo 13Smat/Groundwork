@@ -1,0 +1,74 @@
+# Local development only. The passwords below are the laptop defaults.
+# They are not credentials for Neon, R2, Fly, Render, or any other host.
+# Production must set the variables in .env.example. ADR 0005.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: groundwork
+      POSTGRES_PASSWORD: groundwork
+      POSTGRES_DB: groundwork
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U groundwork -d groundwork"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    build:
+      context: ./docker/minio
+    image: groundwork-minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  minio-init:
+    build:
+      context: ./docker/minio-init
+    image: groundwork-minio-init:RELEASE.2025-08-13T08-35-41Z
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BUCKET: groundwork
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+  # Placeholder. This is upstream TiTiler with no fixture COG, no auth, and no
+  # allows_tracing check. services/tiles still owns that gate.
+  titiler:
+    image: ghcr.io/developmentseed/titiler:2.0.5
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:

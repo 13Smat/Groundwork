@@ -1,11 +1,13 @@
 /*
   Base tokens. The office app imports this file through Tailwind.
   Paper and ink are the page. Accent is the one action color.
+  Accent on paper is about 7.9:1. Muted on paper is about 6.4:1.
 */
 @theme {
   --color-paper: #f4f0e6;
   --color-ink: #1c1915;
   --color-accent: #7a3410;
   --color-line: #d9d1c3;
+  --color-muted: #5c564c;
   --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }

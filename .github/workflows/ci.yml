@@ -33,3 +33,51 @@ jobs:
 
       - name: Check
         run: pnpm check
+
+  db:
+    name: db
+    runs-on: ubuntu-latest
+    # The password is the local compose default, not a hosted credential.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: groundwork
+          POSTGRES_PASSWORD: groundwork
+          POSTGRES_DB: groundwork
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U groundwork -d groundwork"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
+      APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
+      APP_DB_PASSWORD: groundwork
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      - name: Migrate again
+        run: pnpm db:migrate
+
+      - name: Row level security
+        run: pnpm test:rls

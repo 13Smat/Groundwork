@@ -22,6 +22,34 @@ function sendProblem(reply: FastifyReply, body: Problem) {
   return reply.status(body.status).type(PROBLEM_JSON_CONTENT_TYPE).send(body);
 }
 
+/**
+ * A problem the caller wants returned as-is. `detail` is visible to the client,
+ * so it must not contain secrets or SQL.
+ */
+export class ProblemError extends Error {
+  readonly statusCode: number;
+  readonly problemBody: Problem;
+
+  constructor(input: {
+    status: number;
+    title: string;
+    detail?: string | undefined;
+    instance?: string | undefined;
+    type?: string | undefined;
+    errors?: readonly { message: string; path?: string | undefined }[] | undefined;
+  }) {
+    const body = problem(input);
+    super(body.detail ?? body.title);
+    this.name = "ProblemError";
+    this.statusCode = body.status;
+    this.problemBody = body;
+  }
+}
+
+function isProblemError(error: unknown): error is ProblemError {
+  return error instanceof ProblemError;
+}
+
 function statusCodeOf(error: unknown): number | undefined {
   if (typeof error !== "object" || error === null || !("statusCode" in error)) {
     return undefined;
@@ -45,6 +73,14 @@ export function registerProblemHandlers(app: FastifyInstance): void {
 
   app.setErrorHandler((error, request, reply) => {
     const instance = request.url;
+
+    if (isProblemError(error)) {
+      sendProblem(reply, {
+        ...error.problemBody,
+        instance: error.problemBody.instance ?? instance,
+      });
+      return;
+    }
 
     if (hasZodFastifySchemaValidationErrors(error)) {
       const errors = error.validation.map((issue) => {
