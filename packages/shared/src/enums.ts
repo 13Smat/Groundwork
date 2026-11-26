@@ -8,6 +8,21 @@ export type UnitsPreference = z.infer<typeof unitsPreferenceSchema>;
 export const measurementKindSchema = z.enum(["area", "length", "count"]);
 export type MeasurementKind = z.infer<typeof measurementKindSchema>;
 
+/** Catalog item kind. Spec 01. */
+export const catalogKindSchema = z.enum(["material", "labor", "equipment", "sub", "fee"]);
+export type CatalogKind = z.infer<typeof catalogKindSchema>;
+
+/** Takeoff item category. Spec 01. */
+export const takeoffCategorySchema = z.enum([
+  "paving",
+  "landscape",
+  "hardscape",
+  "concrete",
+  "striping",
+  "other",
+]);
+export type TakeoffCategory = z.infer<typeof takeoffCategorySchema>;
+
 /**
  * Human number prefixes from spec 00 (`J-1001`, `E-1001`, `P-1001`, `INV-1001`).
  * The counters table stores the sequence. The start value is still an open question.

@@ -9,6 +9,7 @@ export default defineConfig({
       "**/dist/**",
       "apps/api/test/rls.test.ts",
       "apps/api/test/auth.integration.test.ts",
+      "apps/api/test/catalog.integration.test.ts",
       "apps/api/test/imagery.integration.test.ts",
     ],
   },

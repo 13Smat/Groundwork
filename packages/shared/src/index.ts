@@ -1,9 +1,13 @@
 export {
+  catalogKindSchema,
   humanNumberPrefixSchema,
   measurementKindSchema,
+  takeoffCategorySchema,
   unitsPreferenceSchema,
+  type CatalogKind,
   type HumanNumberPrefix,
   type MeasurementKind,
+  type TakeoffCategory,
   type UnitsPreference,
 } from "./enums.js";
 export { applyCostVisibility, CATALOG_VISIBILITY_SAMPLE } from "./cost.js";
@@ -31,3 +35,13 @@ export {
   transitionMember,
   type MemberStatus,
 } from "./state/member.js";
+export {
+  assertCanVersion,
+  IllegalRecipeTransitionError,
+  isRecipeStatus,
+  RECIPE_STATUSES,
+  RecipeVersionError,
+  recipeEditTarget,
+  transitionRecipe,
+  type RecipeStatus,
+} from "./state/recipe.js";
