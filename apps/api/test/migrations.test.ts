@@ -9,6 +9,7 @@ describe("migration files", () => {
       "0002_auth_workspaces.sql",
       "0003_imagery.sql",
       "0004_imagery_ingest.sql",
+      "0006_catalog_recipes.sql",
     ]);
   });
 });

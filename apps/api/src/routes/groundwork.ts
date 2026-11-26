@@ -1,10 +1,8 @@
 import {
-  CATALOG_VISIBILITY_SAMPLE,
   IllegalMemberTransitionError,
   InviteExpiredError,
   LastOwnerError,
   SYSTEM_ROLE_NAMES,
-  applyCostVisibility,
   assertInviteCurrent,
   assertKeepsAnOwner,
   createId,
@@ -205,7 +203,7 @@ async function permissionsOf(db: AppDb, roleId: string): Promise<string[]> {
 async function requirePermission(
   db: AppDb,
   member: MemberRow,
-  permission: "workspace.manage" | "members.manage" | "catalog.manage",
+  permission: "workspace.manage" | "members.manage",
 ): Promise<string[]> {
   const permissions = await permissionsOf(db, member.role_id);
   if (!hasPermission(permissions, permission)) {
@@ -380,47 +378,6 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
           (order.get(a.name as SystemRoleName) ?? 99) - (order.get(b.name as SystemRoleName) ?? 99),
       );
       return { roles };
-    },
-  );
-
-  app.get(
-    "/catalog-items",
-    {
-      schema: {
-        tags: ["tenant-header"],
-        description:
-          "Requires the x-workspace-id header. Unit cost is omitted without catalog.manage.",
-        response: {
-          200: z.object({
-            items: z.array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                unit: z.string(),
-                unit_price_cents: z.number().int(),
-                unit_cost_cents: z.number().int().optional(),
-              }),
-            ),
-          }),
-        },
-      },
-    },
-    async (request) => {
-      const session = await requireSession(ctx.auth, request.headers);
-      const header = request.headers["x-workspace-id"];
-      if (typeof header !== "string") {
-        throw new ProblemError({
-          status: 400,
-          title: "Bad Request",
-          detail: "x-workspace-id must be a UUIDv7.",
-        });
-      }
-      const workspaceId = parseWorkspaceId(header);
-      const member = await requireActiveMember(ctx, session.id, workspaceId);
-      const permissions = await permissionsOf(ctx.db, member.role_id);
-      return {
-        items: [applyCostVisibility({ ...CATALOG_VISIBILITY_SAMPLE }, permissions)],
-      };
     },
   );
 

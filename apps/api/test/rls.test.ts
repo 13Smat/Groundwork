@@ -698,3 +698,94 @@ async function visibleIds(
     client.release();
   }
 }
+
+describe("catalog row level security", () => {
+  it("isolates catalog and recipe rows and does not grant them to groundwork_auth", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const takeoffA = createId();
+    const takeoffB = createId();
+    const catalogA = createId();
+    const catalogB = createId();
+    const recipeA = createId();
+    const recipeB = createId();
+    const componentA = createId();
+    const admin = requireAdmin();
+    await admin.query(
+      `insert into takeoff_item (id, workspace_id, name, measure_kind, default_unit)
+       values ($1, $2, 'A', 'area', 'ft2'), ($3, $4, 'B', 'area', 'ft2')`,
+      [takeoffA, workspaceA, takeoffB, workspaceB],
+    );
+    await admin.query(
+      `insert into catalog_item (id, workspace_id, kind, name, unit, unit_cost_cents, sku)
+       values ($1, $2, 'material', 'A', 'ton', 100, 'A'),
+              ($3, $4, 'material', 'B', 'ton', 100, 'B')`,
+      [catalogA, workspaceA, catalogB, workspaceB],
+    );
+    await admin.query(
+      `insert into cost_recipe (id, workspace_id, family_id, name, takeoff_item_id, input_unit)
+       values ($1, $2, $1, 'A', $3, 'ft2'), ($4, $5, $4, 'B', $6, 'ft2')`,
+      [recipeA, workspaceA, takeoffA, recipeB, workspaceB, takeoffB],
+    );
+    await admin.query(
+      `insert into recipe_component (id, workspace_id, recipe_id, catalog_item_id, qty_formula)
+       values ($1, $2, $3, $4, 'qty')`,
+      [componentA, workspaceA, recipeA, catalogA],
+    );
+
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const unset = await app.query<{ n: number }>("select count(*)::int as n from catalog_item");
+      expect(unset.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', '', true)");
+      const blank = await app.query<{ n: number }>("select count(*)::int as n from cost_recipe");
+      await app.query("rollback");
+      expect(blank.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const seen = await app.query<{ id: string }>(
+        "select id::text as id from catalog_item order by id",
+      );
+      const recipes = await app.query<{ id: string }>(
+        "select id::text as id from cost_recipe order by id",
+      );
+      const components = await app.query<{ id: string }>(
+        "select id::text as id from recipe_component",
+      );
+      await expect(
+        app.query(
+          `insert into catalog_item (id, workspace_id, kind, name, unit, unit_cost_cents)
+           values ($1, $2, 'fee', 'Leak', 'ea', 1)`,
+          [createId(), workspaceB],
+        ),
+      ).rejects.toThrow(/row-level security|new row violates/i);
+      await app.query("rollback");
+
+      expect(seen.rows.map((row) => row.id)).toEqual([catalogA]);
+      expect(recipes.rows.map((row) => row.id)).toEqual([recipeA]);
+      expect(components.rows.map((row) => row.id)).toEqual([componentA]);
+
+      await expect(auth.query("select id from catalog_item")).rejects.toThrow(/permission denied/i);
+      await expect(auth.query("select id from takeoff_item")).rejects.toThrow(/permission denied/i);
+      await expect(auth.query("select id from cost_recipe")).rejects.toThrow(/permission denied/i);
+      await expect(auth.query("select id from recipe_component")).rejects.toThrow(
+        /permission denied/i,
+      );
+    } finally {
+      app.release();
+      await auth.end();
+      await admin.query("delete from recipe_component where id = $1", [componentA]);
+      await admin.query("delete from cost_recipe where id = any($1::uuid[])", [[recipeA, recipeB]]);
+      await admin.query("delete from catalog_item where id = any($1::uuid[])", [
+        [catalogA, catalogB],
+      ]);
+      await admin.query("delete from takeoff_item where id = any($1::uuid[])", [
+        [takeoffA, takeoffB],
+      ]);
+    }
+  });
+});

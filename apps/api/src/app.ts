@@ -18,6 +18,7 @@ import { createDb } from "./db/client.js";
 import { registerProblemHandlers } from "./errors.js";
 import { registerImageryRoutes, type ImageryRouteOptions } from "./imagery/routes.js";
 import { createLogger } from "./logging.js";
+import { registerCatalogRoutes } from "./catalog/routes.js";
 import { registerGroundworkRoutes } from "./routes/groundwork.js";
 
 export async function buildApp(options?: {
@@ -75,6 +76,11 @@ export async function buildApp(options?: {
       authPool: options.database.auth,
       auth,
       mailer,
+    });
+    await registerCatalogRoutes(app, {
+      db,
+      authPool: options.database.auth,
+      auth,
     });
     await registerImageryRoutes(app, {
       ...options.imagery,

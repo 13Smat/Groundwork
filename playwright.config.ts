@@ -18,8 +18,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command:
-        "pnpm --filter @groundwork/shared build && pnpm --filter @groundwork/api exec tsx test/e2e-server.ts",
+      command: "pnpm build:api-deps && pnpm --filter @groundwork/api exec tsx test/e2e-server.ts",
       url: "http://127.0.0.1:3001/healthz",
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,

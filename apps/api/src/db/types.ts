@@ -152,6 +152,60 @@ export interface Database {
     updated_at: Generated<Date>;
     created_by: string | null;
   };
+  takeoff_item: {
+    id: string;
+    workspace_id: string;
+    name: string;
+    measure_kind: string;
+    default_unit: string;
+    category: string | null;
+    color: string | null;
+    archived_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  catalog_item: {
+    id: string;
+    workspace_id: string;
+    kind: string;
+    name: string;
+    unit: string;
+    unit_cost_cents: string;
+    unit_price_cents: string;
+    waste_pct: string;
+    vendor: string | null;
+    sku: string | null;
+    tax_code: string | null;
+    archived_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  cost_recipe: {
+    id: string;
+    workspace_id: string;
+    family_id: string;
+    name: string;
+    takeoff_item_id: string | null;
+    input_unit: string;
+    variables: ColumnType<unknown, unknown, unknown>;
+    version: number;
+    status: string;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  recipe_component: {
+    id: string;
+    workspace_id: string;
+    recipe_id: string;
+    catalog_item_id: string;
+    qty_formula: string;
+    sort: number;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
   imagery_ingest_job: {
     id: string;
     workspace_id: string;
