@@ -4,10 +4,18 @@
 
 ### Spec 05 part 2 — Assist acceptance in the editor
 
-- `GET /detections/:id`, `POST /detections/:id/accept`, and `POST /detections/:id/reject` review a succeeded run. Accept inserts area measurements with `source = ai_assist` and leaves every other measurement as it was. A review that keeps every draft is `accepted_all`. A review that leaves any draft, including discarding all of them, is `accepted_partial`. A second review is 409. Each mutation writes one `audit_log` row. ADR 0018. No new migration: `0012` already has the statuses and `accepted_measurement_id`.
+- `GET /detections/:id`, `POST /detections/:id/accept`, and `POST /detections/:id/reject` review a succeeded run. Accept inserts area measurements with `source = ai_assist` and leaves every other measurement as it was. A review that keeps every draft is `accepted_all`. A review that leaves any draft, including discarding all of them, is `accepted_partial`. A second review is 409. Each mutation writes one `audit_log` row. ADR 0018. No new migration: `0012` already has the statuses and `accepted_measurement_id`. Migration `0014` stays unused.
 - The editor shows Assist, positive and negative points, a box drag, a working state, a dashed draft layer, and Accept / Refine / Discard when `workspace.features.ai_assist` is true. The controls are absent when it is false. The API still requires `GROUNDWORK_AI_ASSIST=1`. Refine starts a new assist request and rejects the previous run. Accept loads the new measurement on the existing map.
 - `pnpm test:takeoff` covers accept, reject, the state machine, and a cross-tenant 404. Playwright covers the hidden controls and prompt, refine, accept, then a vertex edit, using the mock CV service. The e2e job installs the CV and imagery venvs and starts the mock. No model is downloaded.
 - Hole cut and undo/redo on an accepted polygon wait for the map follow-up. This slice checks the vertex edit and the server summary.
+
+### Spec 07 part 2 — Quantity sync, versions, and the estimate editor
+
+- `GET /estimates/:id/quantity-diff` lists added, removed, and changed takeoff items with the old and new quantity in the item's default unit. The new quantity is the newest takeoff in the lineage, including after `final -> draft` clones a row. A non-draft returns 409. ADR 0019. No new migration.
+- `POST /estimates/:id/apply-quantities` updates only the accepted lines, appends items that were added, deletes lines for items that were removed, and sums totals again. Other lines keep their `updated_at`. The estimate then points at the lineage head. A non-draft returns 409.
+- `POST /estimates/:id/versions` copies the estimate as the next version in draft. `ready` and `sent` become `superseded`. A draft stays a draft. The previous snapshot is not rewritten. `GET /jobs/:id/estimates` lists the versions without cost or margin.
+- The job page links to the estimate editor. Lines are grouped by takeoff item. Variable overrides, a manual line, and the optional toggle save through the existing line routes. Flagged lines warn that ready is blocked. The totals panel hides cost and margin without `catalog.manage`. Sync and versions are a dialog and a drawer. Mark ready uses the existing transition.
+- Mutations write `audit_log` without cost or margin. Playwright covers create, override, a manual line, the optional toggle, the sync dialog, a new version, and mark ready. The spec files were not edited.
 
 ### Spec 04 part 2 — Takeoff editor
 

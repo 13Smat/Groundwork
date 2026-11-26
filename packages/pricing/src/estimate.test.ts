@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  convertQuantity,
   linesFromGroups,
   marginPct,
   priceFromCost,
@@ -195,6 +196,13 @@ describe("estimate pricing", () => {
     expect(priced.costCents).toBe(283642n);
     expect(priced.priceCents).toBe(1000n);
     expect(priced.taxCents).toBe(0n);
+  });
+
+  it("converts a square-yard quantity back to the canonical metre quantity", () => {
+    expect(convertQuantity("9", "ft2", "yd2")).toBe("1");
+    expect(convertQuantity("1", "yd²", "yd2")).toBe("1");
+    const yards = takeoffQuantityForRecipe("area", "10", "yd2");
+    expect(convertQuantity(yards, "yd2", "m2")).toBe("10");
   });
 
   it("prices a takeoff item with no recipe at zero and flags it", () => {

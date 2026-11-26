@@ -87,7 +87,11 @@ const TENANT_ROUTES = [
   "post /detections/{id}/reject",
   "get /takeoffs/{id}/summary",
   "post /jobs/{id}/estimates",
+  "get /jobs/{id}/estimates",
   "get /estimates/{id}",
+  "get /estimates/{id}/quantity-diff",
+  "post /estimates/{id}/apply-quantities",
+  "post /estimates/{id}/versions",
   "patch /estimates/{id}",
   "post /estimates/{id}/lines",
   "post /estimates/{id}/recalculate",
@@ -321,6 +325,10 @@ function tenantPayload(
     case "post /detections/{id}/reject":
       return { all: true };
     case "post /jobs/{id}/estimates":
+      return {};
+    case "post /estimates/{id}/apply-quantities":
+      return {};
+    case "post /estimates/{id}/versions":
       return {};
     case "patch /estimates/{id}":
       return { notes: "no" };
