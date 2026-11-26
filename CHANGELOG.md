@@ -4,11 +4,18 @@
 
 ### Ticket 03 — CRM and jobs API
 
-- Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0008. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.
+- Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0009. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.
 - Job stage changes go through `packages/shared`. Illegal transitions, a missing lost reason, and won without `jobs.force_won` return 409 problem+json. Owner and admin hold that token. Every change writes `audit_log` with the actor and the reason. The first job number in a workspace is `J-1001`.
 - Fixture geocoder and parcel adapters answer without the network or an API key. Parcel hits are cached. Creating a client warns on a duplicate email or phone and still creates the row.
 - Added the CRM and jobs routes, including search and the pipeline summary. Presigned file uploads use the existing MinIO adapter. CI runs `pnpm test:crm` in the `db` job.
 - Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
+### Imagery ingest
+
+- Added `0004_imagery_ingest.sql` for `imagery_ingest_job` and the capture status trigger. `groundwork_app` can write a global imagery row only while `app.imagery_admin` is `on` for that transaction. ADR 0008.
+- Added `services/imagery-ingest`. It converts the committed 4-band fixture GeoTIFF to a COG. NC ortho, Helene 2025, and NAIP download one configured HTTPS GeoTIFF only when the live-fetch env vars are set. CI does not set them.
+- Added `POST /imagery/ingest`, `GET /imagery/ingest/:jobId`, and `GET/POST/PATCH /admin/imagery-sources`. The caller needs a session, an active membership, and the `owner` or `admin` role. Other roles get 403. All five routes are tagged `tenant-header`, so a session that is not a member gets 404. Illegal capture transitions return 409.
+- The office app has an Imagery screen for owner and admin. The Python unit tests run in `check`. The imagery CI job runs the fixture ingest through MinIO and TiTiler. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 
 ### Ticket 02 — Auth and workspaces
 

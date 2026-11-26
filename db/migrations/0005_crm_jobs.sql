@@ -1,4 +1,4 @@
--- CRM and jobs. Spec 03. ADR 0008.
+-- CRM and jobs. Spec 03. ADR 0009.
 --
 -- Tenant policy, on every table in this file except parcel_cache:
 --   workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid

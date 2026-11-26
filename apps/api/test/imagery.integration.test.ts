@@ -269,7 +269,7 @@ describe("imagery captures and tiles", () => {
       url: `/imagery/tiles/${captureId}/${fixture.tile.z}/${fixture.tile.x}/${fixture.tile.y}`,
       headers: tenantHeaders(),
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     expect(response.headers["content-type"]).toContain("image/png");
     const pixel = readPngPixel(response.rawPayload, 128, 128);
     expect(pixel).toEqual({ r: fixture.color.r, g: fixture.color.g, b: fixture.color.b });

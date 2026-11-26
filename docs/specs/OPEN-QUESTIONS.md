@@ -110,7 +110,7 @@ Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nv
 
 Spec 04 accepts `locationId` or `bbox`. Spec 03 owns `location`, and that table is not migrated. [ADR 0006](../adr/0006-imagery-registry-and-tiles.md) accepts the parameter and returns 501 until a lookup is plugged in. `bbox` is the spatial query this slice implements.
 
-[ADR 0008](../adr/0008-crm-jobs.md) adds `location` and resolves `locationId` from `location.point` (a small padded bbox). A missing location, or a location with no point, is 404. Imagery still has no `location_id` column. The 501 stub remains only when a caller registers the imagery routes without a lookup.
+[ADR 0009](../adr/0009-crm-jobs.md) adds `location` and resolves `locationId` from `location.point` (a small padded bbox). A missing location, or a location with no point, is 404. Imagery still has no `location_id` column. The 501 stub remains only when a caller registers the imagery routes without a lookup.
 
 ## Age-warning day counts, tile signature lifetime, and who calls TiTiler
 
@@ -118,26 +118,40 @@ Spec 04 says to warn when a capture is older than 12 months, and to warn more st
 
 The same spec says the API issues short-lived signed tile URLs. It does not say the lifetime, or whether the browser calls TiTiler. This slice proxies. The HMAC lives for 60 seconds and is not given to the browser. `usage_event.cost_estimate_cents` for `imagery_tile` is 0. How a usage row becomes an invoice is already an open question above.
 
+## County ingest has no boundary, no tile URL, and no named role
+
+Spec 04 says ingest is county or AOI only and never statewide. It does not give a square-meter cap or a county polygon. [ADR 0008](../adr/0008-imagery-ingest.md) refuses an AOI above 60_000 km² and a FIPS code ending in `000`. A county job does not test the raster against a county boundary. The empty coverage stored while a county job is `ingesting` is replaced by the raster footprint when the job is `ready`.
+
+The same spec cites ImageServer item pages. It does not give a 4-band GeoTIFF URL template. The live fetcher downloads one HTTPS GeoTIFF from `GROUNDWORK_IMAGERY_TILE_URL` only when `GROUNDWORK_IMAGERY_LIVE_FETCH` is `1`, and it refuses Google, Mapbox, NC OneMap, ArcGIS, ImageServer, and WMS hosts. CI leaves both variables empty. The URL is operator configuration, not a guessed portal endpoint.
+
+`imagery_capture.capture_date`, `gsd_cm`, and `bands` are `not null` in the spec 01 sketch, including status `ingesting`. The worker stores provisional values and the job response omits date, GSD, bands, leaf, and `cog_key` until `ready`.
+
+Spec 04 calls the source screen internal admin and does not name a system role. Ingest and source edits require `member.role` of `owner` or `admin`. Other active roles get 403. ADR 0008.
+
+The route table does not mention `Idempotency-Key`. The builder rule requires a stored key. The same key and body return the existing job. A different body is 409. A failed job is not started again under that key.
+
+`imagery_ingest_job` is not in the spec 01 entity list. The job's `workspace_id` is the operator's workspace. A capture for a global source stays `workspace_id` null. `event_log` still has no `workspace_id`. An ingest completion is `provider = imagery_ingest` and `event_id` equal to the job id.
+
 ## Blocked imagery products are not in the provider check
 
 The spec 01 sketch limits `provider` to `nc_ortho`, `nc_helene_2025`, `naip`, `county`, `nearmap`, `vexcel`, `drone_upload`, and `other`. The blocked rows `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` are stored as `other`. The `name` column is the registry key. The sketch has no separate slug.
 
 ## Client email and phone are not on the spec 01 sketch
 
-The spec 01 `client` sketch has no email or phone. Those columns are on `contact`. Spec 03 says creating a client warns on a duplicate email or phone. [ADR 0008](../adr/0008-crm-jobs.md) stores email and phone on `client` as well, so the warning has a row to match. The spec files were not edited.
+The spec 01 `client` sketch has no email or phone. Those columns are on `contact`. Spec 03 says creating a client warns on a duplicate email or phone. [ADR 0009](../adr/0009-crm-jobs.md) stores email and phone on `client` as well, so the warning has a row to match. The spec files were not edited.
 
 ## `jobs.force_won` is not in the spec 02 matrix
 
-Spec 03 requires `jobs.force_won` to mark a job won without a signed proposal. Spec 02 does not list that token. [ADR 0007](../adr/0007-auth-workspaces.md) does not expand wildcards, so `jobs.*` does not include it. [ADR 0008](../adr/0008-crm-jobs.md) grants it to owner and admin only.
+Spec 03 requires `jobs.force_won` to mark a job won without a signed proposal. Spec 02 does not list that token. [ADR 0007](../adr/0007-auth-workspaces.md) does not expand wildcards, so `jobs.*` does not include it. [ADR 0009](../adr/0009-crm-jobs.md) grants it to owner and admin only.
 
 ## Assigned CRM reads
 
-Spec 02 gives foreman `crm.read.assigned` and `jobs.read.assigned`. It does not say which clients, contacts, or locations that includes. ADR 0008 treats it as jobs whose `owner_member_id` is the caller, plus clients, contacts, and locations tied to those jobs. Search uses that filter when either token is the caller's only read.
+Spec 02 gives foreman `crm.read.assigned` and `jobs.read.assigned`. It does not say which clients, contacts, or locations that includes. ADR 0009 treats it as jobs whose `owner_member_id` is the caller, plus clients, contacts, and locations tied to those jobs. Search uses that filter when either token is the caller's only read.
 
 ## Job number starts, and the signed-proposal flag
 
-Spec 03's examples use `J-1001`. The start value for `E`, `P`, and `INV` was still open. ADR 0008 starts `J` at 1001 and leaves the others alone. There is no proposal table in this slice, so `hasSignedProposal` is always false. `proposed -> won` needs `jobs.force_won` until spec 08.
+Spec 03's examples use `J-1001`. The start value for `E`, `P`, and `INV` was still open. ADR 0009 starts `J` at 1001 and leaves the others alone. There is no proposal table in this slice, so `hasSignedProposal` is always false. `proposed -> won` needs `jobs.force_won` until spec 08.
 
 ## Note, task, and file shapes, and an ungeocodable resolve
 
-Spec 03 names notes, tasks, and files on a job and does not give columns. ADR 0008 stores a note body, a task title with `done` and `due_at`, and a `job_file` row pointing at `file`. `POST /locations/resolve` is not given a status for an address the geocoder cannot place. This slice returns 200 with `point: null`, an empty parcel list, and a warning. List routes cap at 200 rows. `GET /jobs` defaults to 50 and caps at 200. Paging is not in the spec.
+Spec 03 names notes, tasks, and files on a job and does not give columns. ADR 0009 stores a note body, a task title with `done` and `due_at`, and a `job_file` row pointing at `file`. `POST /locations/resolve` is not given a status for an address the geocoder cannot place. This slice returns 200 with `point: null`, an empty parcel list, and a warning. List routes cap at 200 rows. `GET /jobs` defaults to 50 and caps at 200. Paging is not in the spec.

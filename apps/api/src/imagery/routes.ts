@@ -20,6 +20,8 @@ import {
   parseBBox,
   type BBox,
 } from "./policy.js";
+import { registerImageryAdminRoutes } from "./admin-routes.js";
+import type { IngestDispatch } from "./ingest-service.js";
 import { defaultTileFetch, fetchSignedTile, signedTileUrl, type TileFetch } from "./proxy.js";
 
 const captureResponseSchema = z.object({
@@ -60,6 +62,8 @@ export const locationLookupUnavailable: LocationLookup = () => {
 export type ImageryRouteOptions = {
   db: Kysely<Database>;
   auth: ImageryAuthHook;
+  /** Session, membership, and the owner or admin role. ADR 0008. */
+  adminAuth: ImageryAuthHook;
   locationLookup?: LocationLookup;
   now?: () => Date;
   /** Capture age is measured against this instant. Defaults to `now`. Tests freeze it. */
@@ -67,6 +71,7 @@ export type ImageryRouteOptions = {
   titiler?: URL;
   signingSecret?: string;
   fetchImpl?: TileFetch;
+  ingestDispatch?: IngestDispatch;
 };
 
 type CaptureRow = {
@@ -109,6 +114,11 @@ export async function registerImageryRoutes(
   const titiler = options.titiler ?? readTitilerUrl();
   const signingSecret = options.signingSecret ?? readTileSigningSecret();
   const fetchImpl = options.fetchImpl ?? defaultTileFetch;
+  await registerImageryAdminRoutes(app, {
+    db: options.db,
+    auth: options.adminAuth,
+    ...(options.ingestDispatch ? { dispatch: options.ingestDispatch } : {}),
+  });
 
   routes.get(
     "/imagery/captures",

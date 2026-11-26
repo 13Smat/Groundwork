@@ -6,7 +6,7 @@
  *
  * `jobs.force_won` is not in the spec 02 matrix. Spec 03 requires it to mark a
  * job won without a signed proposal. Wildcards are not expanded, so `jobs.*`
- * does not include it. Owner and admin hold the token. ADR 0008.
+ * does not include it. Owner and admin hold the token. ADR 0009.
  */
 export const PERMISSIONS = [
   "workspace.manage",

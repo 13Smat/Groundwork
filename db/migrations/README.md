@@ -10,4 +10,6 @@ A new tenant table needs the policy in `0001_extensions_and_infra.sql`, `enable`
 
 `imagery_source` and `imagery_capture` are the exception. A null `workspace_id` is a global row. The read policy is `workspace_id is null or workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid`. Writes from `groundwork_app` require a non-null workspace id. ADR 0006.
 
-`0005_crm_jobs.sql` adds the CRM tables and the global `parcel_cache`. `parcel_cache` has no `workspace_id` and no row security. The other tables use the foundations policy and are granted to `groundwork_app` only. `0004` and `0006` belong to other slices. ADR 0008.
+`0004_imagery_ingest.sql` adds `imagery_ingest_job` and lets the app role update a global imagery row only when `app.imagery_admin` is `on` for that transaction. The API sets it after the member role is owner or admin. There is no admin delete policy. ADR 0008.
+
+`0005_crm_jobs.sql` adds the CRM tables and the global `parcel_cache`. `parcel_cache` has no `workspace_id` and no row security. The other tables use the foundations policy and are granted to `groundwork_app` only. `0006` is the catalog. ADR 0009.

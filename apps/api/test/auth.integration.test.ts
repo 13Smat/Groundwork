@@ -28,8 +28,13 @@ const TENANT_ROUTES = [
   "post /workspaces/{id}/invites",
   "patch /members/{id}",
   "get /catalog-items",
+  "get /admin/imagery-sources",
+  "post /admin/imagery-sources",
+  "patch /admin/imagery-sources/{sourceId}",
   "get /imagery/captures",
   "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
+  "post /imagery/ingest",
+  "get /imagery/ingest/{jobId}",
   "get /clients",
   "post /clients",
   "get /clients/{id}",
@@ -549,7 +554,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
@@ -564,6 +569,8 @@ describe("auth and workspaces", () => {
           .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`)
           .replaceAll("{id}", createId())
           .replace("{captureId}", createId())
+          .replace("{jobId}", createId())
+          .replace("{sourceId}", createId())
           .replace("{z}", "1")
           .replace("{x}", "0")
           .replace("{y}", "0");
@@ -638,6 +645,18 @@ function tenantPayload(
       return { title: "task" };
     case "post /jobs/{id}/files":
       return { mime: "image/png" };
+    case "post /imagery/ingest":
+      return { sourceId: createId(), year: 2026, countyFips: "37023" };
+    case "post /admin/imagery-sources":
+      return {
+        provider: "other",
+        name: "Nope",
+        bands: "RGB",
+        allowsTracing: false,
+        allowsMlTraining: false,
+      };
+    case "patch /admin/imagery-sources/{sourceId}":
+      return { notes: "Nope" };
     default:
       return undefined;
   }

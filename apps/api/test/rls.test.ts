@@ -523,9 +523,9 @@ describe("imagery row level security", () => {
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relname = any($1::text[])
       `,
-      [["imagery_source", "imagery_capture"]],
+      [["imagery_source", "imagery_capture", "imagery_ingest_job"]],
     );
-    expect(result.rows).toHaveLength(2);
+    expect(result.rows).toHaveLength(3);
     for (const row of result.rows) {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
@@ -616,6 +616,53 @@ describe("imagery row level security", () => {
       "select allows_tracing from imagery_source where name = 'google_satellite'",
     );
     expect(stillBlocked.rows[0]?.allows_tracing).toBe(false);
+  });
+
+  it("lets the app role write a global source only while imagery admin is on", async () => {
+    const workspaceA = createId();
+    const client = await requireApp().connect();
+    try {
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const denied = await client.query(
+        "update imagery_source set notes = 'denied' where name = 'naip'",
+      );
+      expect(denied.rowCount).toBe(0);
+      await client.query("select set_config('app.imagery_admin', 'on', true)");
+      const allowed = await client.query(
+        "update imagery_source set notes = 'admin-probe' where name = 'naip'",
+      );
+      expect(allowed.rowCount).toBe(1);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+    const notes = await requireAdmin().query<{ notes: string | null }>(
+      "select notes from imagery_source where name = 'naip'",
+    );
+    expect(notes.rows[0]?.notes).not.toBe("admin-probe");
+  });
+
+  it("rejects a ready capture moving to failed", async () => {
+    const client = await requireAdmin().connect();
+    try {
+      await client.query("begin");
+      await expect(
+        client.query(
+          `update imagery_capture
+           set status = 'failed'
+           where id = (
+             select c.id from imagery_capture c
+             join imagery_source s on s.id = c.source_id
+             where s.name = 'fixture_rgbir' and c.status = 'ready'
+             limit 1
+           )`,
+        ),
+      ).rejects.toThrow(/illegal imagery capture transition from ready to failed/);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
   });
 });
 
