@@ -466,7 +466,29 @@ export interface Database {
     signed_pdf_file_id: string | null;
     provider: string | null;
     provider_envelope_id: string | null;
+    recipients: ColumnType<unknown, unknown, unknown>;
+    message: string;
+    bounced: boolean;
     expires_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  proposal_token: {
+    token_hash: string;
+    workspace_id: string;
+    proposal_id: string;
+    created_at: Generated<Date>;
+  };
+  work_order: {
+    id: string;
+    workspace_id: string;
+    job_id: string;
+    estimate_id: string | null;
+    proposal_id: string | null;
+    title: string;
+    scope: ColumnType<unknown, unknown, unknown>;
+    status: string;
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
     created_by: string | null;

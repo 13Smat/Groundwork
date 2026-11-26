@@ -1,5 +1,12 @@
 import type { Writable } from "node:stream";
-import pino, { type Logger, type LoggerOptions } from "pino";
+import pino, { type Logger, type LoggerOptions, stdSerializers } from "pino";
+
+function redactUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return url;
+  }
+  return url.replace(/\/public\/proposals\/[^/?]+/g, "/public/proposals/[redacted]");
+}
 
 const REDACTED = "[redacted]";
 
@@ -11,6 +18,8 @@ export function createLoggerOptions(): LoggerOptions {
       paths: [
         "req.headers.authorization",
         "req.headers.cookie",
+        'req.headers["x-esign-signature"]',
+        "req.params.token",
         "password",
         "secretAccessKey",
         "*.password",
@@ -18,6 +27,22 @@ export function createLoggerOptions(): LoggerOptions {
         "*.authorization",
       ],
       censor: REDACTED,
+    },
+    serializers: {
+      req(req) {
+        const base = stdSerializers.req(req);
+        const url = redactUrl(base.url);
+        const headers = { ...base.headers };
+        delete headers["x-esign-signature"];
+        const params =
+          base.params && typeof base.params === "object"
+            ? { ...(base.params as Record<string, unknown>) }
+            : undefined;
+        if (params && url?.includes("/public/proposals/")) {
+          params.token = "[redacted]";
+        }
+        return { ...base, url, headers, ...(params ? { params } : {}) };
+      },
     },
   };
 }

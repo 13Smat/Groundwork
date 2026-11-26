@@ -22,6 +22,7 @@ export default defineConfig({
       "apps/api/test/assist-review.integration.test.ts",
       "apps/api/test/estimating.integration.test.ts",
       "apps/api/test/proposals.integration.test.ts",
+      "apps/api/test/esign.integration.test.ts",
       "apps/api/test/assist.integration.test.ts",
     ],
   },

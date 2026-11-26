@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Spec 08 part 2 — Dropbox Sign adapter, webhooks, and the won flow
+
+- Added `0017_esign_work_order.sql` for `work_order` and `proposal_token`. Tenant row security is forced. `groundwork_app` is the only grantee. `work_order_before_update` is `SECURITY INVOKER`. `proposal_token` can also be selected by `app.proposal_token_hash`. `event_log` from `0001` is unchanged and still has no `workspace_id`. ADR 0021. The provider interface is `EsignProvider`. ADR 0003's `SignatureProvider` name is that same seam.
+- `WorkOrder.status` lives in `packages/shared`. `ready -> scheduled -> dispatched -> in_progress -> done`, and any status before `done` may become `cancelled`. This slice only inserts `ready`.
+- `FakeEsignProvider` is the local and CI provider. `DropboxSignProvider` is constructed only when `DROPBOX_SIGN_API_KEY` is set. Its tests inject `fetch` and a recorded event hash. No Dropbox Sign account, call, or key. `.env.example` adds empty `DROPBOX_SIGN_LIVE` and `ESIGN_WEBHOOK_SECRET` placeholders.
+- `POST /proposals/:id/link` returns the raw token once while the proposal is `rendered`. `GET/POST /public/proposals/:token` reads that hash and re-renders the PDF when the client changes optional items. `POST /proposals/:id/send` creates the envelope from the stored PDF. `POST /proposals/:id/void` voids it. `POST /webhooks/esign/:provider` checks the signature in constant time, returns 401 when it does not match, and stores the event in `event_log`. A duplicate event does not apply twice. An event that arrives before the envelope id stays unprocessed until send. A voided, expired, or superseded link is 410. Public and webhook routes allow 30 calls per 10 seconds per address per process. `POST /public/proposals/:token/sign` exists only for the fake provider.
+- When every recipient has signed, one transaction sets the proposal `signed`, the estimate `accepted`, and the job `won`, inserts a `ready` work order, stores the signed PDF, and writes `audit_log` and one `esign_send` usage row. Send writes another `esign_send` row. A thrown fault rolls the signed transaction back. `usage_event` from that transaction is included.
+- The builder shows Send, a client link, and a timeline with Void and Revise. Revise voids the proposal and clones the estimate. It does not add a proposal-number suffix. The public page is `/p/$token`. The spec files were not edited.
+
 ### Spec 08 part 1 — Proposal PDF templates, worker, and preview
 
 - Added `0016_proposals.sql` for `proposal_template`, `proposal`, and `signature`. Tenant row security is forced. `groundwork_app` is the only grantee. The trigger functions are `SECURITY INVOKER`. ADR 0020. pg-boss already owns the `pgboss` schema. This slice does not add a queue. Migrations `0007`, `0008`, `0010`, and `0013` through `0015` stay unused.

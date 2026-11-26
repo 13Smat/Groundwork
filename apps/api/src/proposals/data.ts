@@ -51,6 +51,15 @@ export type ProposalView = {
   tax_cents: number;
   total_cents: number;
   lines: ProposalLineView[];
+  bounced: boolean;
+  recipients: { name: string; email: string }[];
+  signatures: {
+    signer_name: string | null;
+    signer_email: string | null;
+    signed_at: string | null;
+  }[];
+  work_order_id: string | null;
+  estimate_status: string;
   created_at: string;
   updated_at: string;
 };
@@ -246,6 +255,11 @@ function present(row: ProposalRow, snapshot: EstimateView): ProposalView {
     tax_cents: snapshot.tax_cents + selectedTax,
     total_cents: snapshot.total_cents + selectedPrice + selectedTax,
     lines,
+    bounced: row.bounced,
+    recipients: [],
+    signatures: [],
+    work_order_id: null,
+    estimate_status: "ready",
     created_at: requiredIso(row.created_at),
     updated_at: requiredIso(row.updated_at),
   };
@@ -329,7 +343,52 @@ export async function getProposal(trx: Trx, id: string): Promise<ProposalView> {
   if (!row) {
     throw notFound("That proposal was not found.");
   }
-  return present(row, parseSnapshot(row.snapshot));
+  const view = present(row, parseSnapshot(row.snapshot));
+  const estimate = await trx
+    .selectFrom("estimate")
+    .select("status")
+    .where("id", "=", row.estimate_id)
+    .executeTakeFirst();
+  const signatures = await trx
+    .selectFrom("signature")
+    .select(["signer_name", "signer_email", "signed_at"])
+    .where("proposal_id", "=", row.id)
+    .orderBy("created_at")
+    .execute();
+  const workOrder = await trx
+    .selectFrom("work_order")
+    .select("id")
+    .where("proposal_id", "=", row.id)
+    .executeTakeFirst();
+  view.bounced = row.bounced;
+  view.recipients = recipientList(row.recipients);
+  view.signatures = signatures.map((signature) => ({
+    signer_name: signature.signer_name,
+    signer_email: signature.signer_email,
+    signed_at: iso(signature.signed_at),
+  }));
+  view.work_order_id = workOrder?.id ?? null;
+  view.estimate_status = estimate?.status ?? view.estimate_status;
+  return view;
+}
+
+function recipientList(value: unknown): { name: string; email: string }[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const recipients: { name: string; email: string }[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const row = item as Record<string, unknown>;
+    const name = typeof row.name === "string" ? row.name : "";
+    const email = typeof row.email === "string" ? row.email : "";
+    if (name && email) {
+      recipients.push({ name, email });
+    }
+  }
+  return recipients;
 }
 
 export async function listEstimateProposals(
@@ -430,8 +489,19 @@ export async function createProposal(
         signed_pdf_file_id: null,
         provider: null,
         provider_envelope_id: null,
+        recipients: sql`'[]'::jsonb`,
+        message: "",
+        bounced: false,
         expires_at: null,
         created_by: input.memberId,
+      })
+      .execute();
+    await trx
+      .insertInto("proposal_token")
+      .values({
+        token_hash: hash,
+        workspace_id: input.workspaceId,
+        proposal_id: id,
       })
       .execute();
     await audit(trx, {

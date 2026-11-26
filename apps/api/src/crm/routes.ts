@@ -347,13 +347,14 @@ function guardTransition(input: {
   to: JobStage;
   reason?: string | undefined;
   canForceWon: boolean;
+  hasSignedProposal: boolean;
 }): JobStage {
   try {
     return transitionJob({
       from: input.from,
       to: input.to,
       reason: input.reason,
-      hasSignedProposal: false,
+      hasSignedProposal: input.hasSignedProposal,
       canForceWon: input.canForceWon,
     });
   } catch (error) {
@@ -1172,11 +1173,19 @@ export async function registerCrmRoutes(
             `Job ${existing.id} has stage ${existing.stage}, which is not in the machine.`,
           );
         }
+        const signed = await trx
+          .selectFrom("proposal")
+          .innerJoin("estimate", "estimate.id", "proposal.estimate_id")
+          .select("proposal.id")
+          .where("estimate.job_id", "=", existing.id)
+          .where("proposal.status", "=", "signed")
+          .executeTakeFirst();
         const next = guardTransition({
           from: existing.stage,
           to: request.body.to,
           reason: request.body.reason,
           canForceWon: tenant.jobs.forceWon,
+          hasSignedProposal: signed !== undefined,
         });
         const reason = request.body.reason?.trim() ? request.body.reason.trim() : null;
         await setJobStage(trx, {

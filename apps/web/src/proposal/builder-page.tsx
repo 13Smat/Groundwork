@@ -1,6 +1,6 @@
 import { Button } from "@groundwork/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { formatCents } from "../crm/format";
@@ -8,6 +8,8 @@ import { message } from "../crm/messages";
 import { useWorkspace } from "../crm/workspace";
 import { api } from "../session";
 import { ProposalPreview } from "./preview";
+import { SendDialog } from "./send-dialog";
+import { ProposalTimeline } from "./timeline";
 import type { Proposal } from "./types";
 
 const fieldClass =
@@ -15,6 +17,7 @@ const fieldClass =
 
 export function ProposalBuilderPage({ proposalId }: { proposalId: string }) {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const { currency } = useWorkspace();
   const proposal = useQuery({
     queryKey: ["proposal", proposalId],
@@ -27,6 +30,8 @@ export function ProposalBuilderPage({ proposalId }: { proposalId: string }) {
   const [synced, setSynced] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [clientLink, setClientLink] = useState("");
 
   if (proposal.data && synced !== proposal.data.updated_at) {
     setIntro(proposal.data.intro);
@@ -70,6 +75,62 @@ export function ProposalBuilderPage({ proposalId }: { proposalId: string }) {
       setError(message(err, "Could not save the proposal."));
       return undefined;
     } finally {
+      setPending(false);
+    }
+  }
+
+  async function shareLink() {
+    setError("");
+    setPending(true);
+    try {
+      const issued = await api<{ token: string }>(`/proposals/${row.id}/link`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setClientLink(`${window.location.origin}/p/${issued.token}`);
+    } catch (err) {
+      setError(message(err, "Could not create a client link."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function voidProposal() {
+    setError("");
+    setPending(true);
+    try {
+      const next = await api<Proposal>(`/proposals/${row.id}/void`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      client.setQueryData(["proposal", row.id], next);
+    } catch (err) {
+      setError(message(err, "Could not void the proposal."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function revise() {
+    setError("");
+    setPending(true);
+    try {
+      if (row.status !== "void" && row.status !== "signed") {
+        await api<Proposal>(`/proposals/${row.id}/void`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+      }
+      const created = await api<{ id: string }>(`/estimates/${row.estimate_id}/versions`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      await navigate({
+        to: "/jobs/$jobId/estimates/$estimateId",
+        params: { jobId: row.job_id, estimateId: created.id },
+      });
+    } catch (err) {
+      setError(message(err, "Could not revise the estimate."));
       setPending(false);
     }
   }
@@ -198,7 +259,28 @@ export function ProposalBuilderPage({ proposalId }: { proposalId: string }) {
             <Button type="button" disabled={pending || !draft} onClick={() => void renderPdf()}>
               Render PDF
             </Button>
+            {row.status === "rendered" && row.pdf_file_id ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => void shareLink()}
+                >
+                  Client link
+                </Button>
+                <Button type="button" disabled={pending} onClick={() => setSendOpen(true)}>
+                  Send
+                </Button>
+              </>
+            ) : null}
           </div>
+          {clientLink ? (
+            <label className="flex flex-col gap-1 text-sm font-semibold" htmlFor="client-link">
+              Client link
+              <input id="client-link" className={fieldClass} readOnly value={clientLink} />
+            </label>
+          ) : null}
         </form>
         {row.pdf_file_id ? (
           <ProposalPreview key={row.pdf_file_id} proposalId={row.id} />
@@ -206,6 +288,22 @@ export function ProposalBuilderPage({ proposalId }: { proposalId: string }) {
           <p>Render the proposal to preview the PDF.</p>
         )}
       </div>
+      {row.status !== "draft" ? (
+        <ProposalTimeline
+          proposal={row}
+          pending={pending}
+          onVoid={() => void voidProposal()}
+          onRevise={() => void revise()}
+        />
+      ) : null}
+      <SendDialog
+        proposalId={row.id}
+        open={sendOpen}
+        onOpenChange={setSendOpen}
+        onSent={(next) => {
+          client.setQueryData(["proposal", row.id], next);
+        }}
+      />
     </div>
   );
 }

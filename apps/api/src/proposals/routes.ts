@@ -22,6 +22,10 @@ import {
   patchProposal,
   patchTemplate,
 } from "./data.js";
+import type { Mailer } from "../auth/mail.js";
+import { registerEsignRoutes } from "./esign-routes.js";
+import type { EsignProvider } from "./esign.js";
+import type { ProposalFiles } from "./files.js";
 import type { ProposalRenderMessage } from "./render.js";
 import { readProposalPdf, waitForRenderedPdf } from "./render.js";
 
@@ -51,6 +55,10 @@ export type ProposalContext = {
   authPool: pg.Pool;
   auth: Auth;
   dispatch?: ((message: ProposalRenderMessage) => Promise<void>) | undefined;
+  esign?: EsignProvider | undefined;
+  files?: ProposalFiles | undefined;
+  renderPdf?: ((html: string) => Promise<Buffer>) | undefined;
+  mailer?: Mailer | undefined;
 };
 
 const lineSchema = z.object({
@@ -87,6 +95,17 @@ const proposalSchema = z.object({
   tax_cents: z.number().int(),
   total_cents: z.number().int(),
   lines: z.array(lineSchema),
+  bounced: z.boolean(),
+  recipients: z.array(z.object({ name: z.string(), email: z.string() })),
+  signatures: z.array(
+    z.object({
+      signer_name: z.string().nullable(),
+      signer_email: z.string().nullable(),
+      signed_at: z.string().nullable(),
+    }),
+  ),
+  work_order_id: z.string().nullable(),
+  estimate_status: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -420,4 +439,6 @@ export async function registerProposalRoutes(app: ApiApp, ctx: ProposalContext):
         }),
       ),
   );
+
+  await registerEsignRoutes(app, ctx, proposalSchema);
 }

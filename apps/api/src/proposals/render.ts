@@ -12,6 +12,7 @@ import { listFeatures, loadImageryStamp } from "../takeoff/data.js";
 import { renderSiteMap, type SiteMapFeature, type SiteMapStamp } from "../takeoff/site-map.js";
 import { getObject, putObject, workspaceStorageKey } from "../storage/s3.js";
 import { loadProposalForRender, markProposalRendered, type ProposalView } from "./data.js";
+import type { ProposalFiles } from "./files.js";
 import { renderProposalPdf } from "./pdf.js";
 
 const MISSING_PDF = "That proposal PDF is not in storage.";
@@ -167,6 +168,39 @@ async function loadCover(
   });
 }
 
+export async function buildProposalHtml(
+  db: Kysely<Database>,
+  workspaceId: string,
+  proposalId: string,
+): Promise<{ html: string; status: string }> {
+  const loaded = await withWorkspaceContext(db, workspaceId, (trx) =>
+    loadProposalForRender(trx, proposalId),
+  );
+  if (!loaded) {
+    throw new ProblemError({
+      status: 404,
+      title: "Not Found",
+      detail: "That proposal was not found.",
+    });
+  }
+  const cover = await loadCover(db, workspaceId, loaded.view);
+  const png = loaded.view.include_site_map ? renderSiteMap(cover.features, cover.stamp) : null;
+  return {
+    status: loaded.row.status,
+    html: renderProposalHtml(
+      modelFromProposal({
+        view: loaded.view,
+        workspaceName: cover.workspaceName,
+        clientName: cover.clientName,
+        siteAddress: cover.siteAddress,
+        jobName: cover.jobName,
+        siteMapPngBase64: png ? png.toString("base64") : null,
+        imagery: cover.imagery,
+      }),
+    ),
+  };
+}
+
 /**
  * Reads the pinned snapshot, paints the site map, prints the PDF, and stores it.
  * The worker calls this. The request waits until the row is rendered.
@@ -191,20 +225,8 @@ export async function performProposalRender(
   if (loaded.row.status !== "draft") {
     throw conflict("That proposal cannot be rendered.");
   }
-  const cover = await loadCover(db, message.workspaceId, loaded.view);
-  const png = loaded.view.include_site_map ? renderSiteMap(cover.features, cover.stamp) : null;
-  const html = renderProposalHtml(
-    modelFromProposal({
-      view: loaded.view,
-      workspaceName: cover.workspaceName,
-      clientName: cover.clientName,
-      siteAddress: cover.siteAddress,
-      jobName: cover.jobName,
-      siteMapPngBase64: png ? png.toString("base64") : null,
-      imagery: cover.imagery,
-    }),
-  );
-  const pdf = await renderProposalPdf(html);
+  const built = await buildProposalHtml(db, message.workspaceId, message.proposalId);
+  const pdf = await renderProposalPdf(built.html);
   const fileId = createId();
   const storageKey = workspaceStorageKey(message.workspaceId, fileId);
   await putObject({ storageKey, body: pdf, mime: "application/pdf" });
@@ -240,6 +262,48 @@ export async function performProposalRender(
       proposalId: message.proposalId,
       fileId,
     });
+  });
+}
+
+/** Replace the PDF after the client chooses optional items, while status stays rendered. */
+export async function rerenderRenderedProposal(
+  db: Kysely<Database>,
+  input: { workspaceId: string; proposalId: string; actorMemberId: string | null },
+  deps: { files: ProposalFiles; renderPdf: (html: string) => Promise<Buffer> },
+): Promise<void> {
+  const built = await buildProposalHtml(db, input.workspaceId, input.proposalId);
+  if (built.status !== "rendered") {
+    throw conflict("Optional items can be saved only before the proposal is sent.");
+  }
+  const pdf = await deps.renderPdf(built.html);
+  const fileId = createId();
+  const storageKey = workspaceStorageKey(input.workspaceId, fileId);
+  await deps.files.put({ storageKey, body: pdf, mime: "application/pdf" });
+  const sha256 = createHash("sha256").update(pdf).digest("hex");
+  await withWorkspaceContext(db, input.workspaceId, async (trx) => {
+    const current = await loadProposalForRender(trx, input.proposalId);
+    if (!current || current.row.status !== "rendered") {
+      throw conflict("Optional items can be saved only before the proposal is sent.");
+    }
+    await trx
+      .insertInto("file")
+      .values({
+        id: fileId,
+        workspace_id: input.workspaceId,
+        storage_key: storageKey,
+        mime: "application/pdf",
+        bytes: String(pdf.length),
+        sha256,
+        status: "ready",
+        created_by: input.actorMemberId,
+      })
+      .execute();
+    await trx
+      .updateTable("proposal")
+      .set({ pdf_file_id: fileId })
+      .where("id", "=", input.proposalId)
+      .where("status", "=", "rendered")
+      .execute();
   });
 }
 
