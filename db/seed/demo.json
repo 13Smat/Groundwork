@@ -1,0 +1,93 @@
+{
+  "workspace": {
+    "id": "018f6b10-0000-7000-8000-0000000000d1",
+    "name": "Cedar Ridge Paving",
+    "slug": "cedar-ridge-paving",
+    "timezone": "America/New_York",
+    "currency": "USD",
+    "units_pref": "imperial",
+    "license_number": "NC-PW-44021",
+    "address": {
+      "line1": "18 Mill Pond Lane",
+      "city": "Morganton",
+      "region": "NC",
+      "postal_code": "28655",
+      "country": "US"
+    }
+  },
+  "member": {
+    "id": "018f6b10-0000-7000-8000-0000000000d2",
+    "email": "seed-owner@example.com"
+  },
+  "clients": [
+    {
+      "id": "018f6b10-0000-7000-8000-0000000000d3",
+      "contact_id": "018f6b10-0000-7000-8000-0000000000d4",
+      "type": "residential",
+      "name": "Hale Family",
+      "email": "rowan.hale@example.com",
+      "phone": "8285550148",
+      "contact_name": "Rowan Hale",
+      "contact_role": "owner",
+      "billing_address": {
+        "line1": "410 Cedar Ridge Road",
+        "city": "Morganton",
+        "region": "NC",
+        "postal_code": "28655",
+        "country": "US"
+      }
+    },
+    {
+      "id": "018f6b10-0000-7000-8000-0000000000d5",
+      "contact_id": "018f6b10-0000-7000-8000-0000000000d6",
+      "type": "commercial",
+      "name": "Brookside Market",
+      "email": "mina.brooks@example.com",
+      "phone": "8285550192",
+      "contact_name": "Mina Brooks",
+      "contact_role": "manager",
+      "billing_address": {
+        "line1": "88 Brookside Court",
+        "city": "Morganton",
+        "region": "NC",
+        "postal_code": "28655",
+        "country": "US"
+      }
+    }
+  ],
+  "locations": [
+    {
+      "id": "018f6b10-0000-7000-8000-0000000000d7",
+      "client_id": "018f6b10-0000-7000-8000-0000000000d3",
+      "address": {
+        "line1": "410 Cedar Ridge Road",
+        "city": "Morganton",
+        "region": "NC",
+        "postal_code": "28655",
+        "country": "US"
+      },
+      "point": { "lat": 35.748741, "lng": -81.702576, "delta": 0.0003 },
+      "notes": "Demo driveway inside the synthetic fixture COG."
+    },
+    {
+      "id": "018f6b10-0000-7000-8000-0000000000d8",
+      "client_id": "018f6b10-0000-7000-8000-0000000000d5",
+      "address": {
+        "line1": "88 Brookside Court",
+        "city": "Morganton",
+        "region": "NC",
+        "postal_code": "28655",
+        "country": "US"
+      },
+      "point": { "lat": 35.7495, "lng": -81.7012, "delta": 0.00025 },
+      "notes": "Demo lot inside the synthetic fixture COG."
+    }
+  ],
+  "job": {
+    "id": "018f6b10-0000-7000-8000-0000000000d9",
+    "client_id": "018f6b10-0000-7000-8000-0000000000d3",
+    "location_id": "018f6b10-0000-7000-8000-0000000000d7",
+    "name": "Cedar Ridge driveway"
+  },
+  "fixture_capture_id": "018f5a00-0000-7000-8000-000000000108"
+}

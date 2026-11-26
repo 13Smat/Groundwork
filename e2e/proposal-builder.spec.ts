@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { skipOnboarding } from "./session";
+
 const PASSWORD = "correct-horse-battery";
 
 function email(prefix: string): string {
@@ -16,7 +18,7 @@ async function signUp(page: Page, name: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Create workspace" })).toBeVisible();
   await page.getByLabel("Company name").fill(`${name} Co`);
   await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await skipOnboarding(page);
 }
 
 async function call(page: Page, path: string, init?: { method?: string; body?: unknown }) {

@@ -10,7 +10,8 @@
     "start:worker": "node dist/worker.js",
     "worker": "tsx src/worker.ts",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:migrate:down": "tsx src/db/migrate.ts --down"
+    "db:migrate:down": "tsx src/db/migrate.ts --down",
+    "db:seed": "tsx src/seed/cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1178.0",

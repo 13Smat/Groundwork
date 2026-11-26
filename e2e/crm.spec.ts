@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { skipOnboarding } from "./session";
+
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
@@ -99,5 +101,5 @@ async function signUp(page: Page, email: string) {
   await expect(page.getByRole("heading", { name: "Create workspace" })).toBeVisible();
   await page.getByLabel("Company name").fill("Pat Paving");
   await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await skipOnboarding(page);
 }

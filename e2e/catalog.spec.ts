@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { skipOnboarding } from "./session";
+
 const PASSWORD = "correct-horse-battery";
 
 function email(prefix: string): string {
@@ -11,7 +13,7 @@ async function createWorkspace(page: Page, company: string): Promise<void> {
   await page.getByRole("button", { name: "Create workspace" }).click();
   // The office nav is already on this page. Opening Catalog before the
   // workspace exists redirects back here, and the form never shows.
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await skipOnboarding(page);
 }
 
 async function signUp(page: Page, name: string, address: string): Promise<void> {

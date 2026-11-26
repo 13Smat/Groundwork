@@ -19,6 +19,7 @@
     "test:takeoff": "pnpm build:api-deps && vitest run --config vitest.takeoff.config.ts",
     "test:estimating": "pnpm build:api-deps && vitest run --config vitest.estimating.config.ts",
     "test:proposals": "pnpm build:api-deps && vitest run --config vitest.proposals.config.ts",
+    "test:seed": "pnpm build:api-deps && vitest run --config vitest.seed.config.ts",
     "test:assist": "pnpm build:api-deps && vitest run --config vitest.assist.config.ts",
     "test:cv": "sh scripts/test-cv.sh",
     "test:e2e": "pnpm build:api-deps && playwright test",
@@ -28,6 +29,7 @@
     "build": "turbo run build",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:tiles && pnpm test:imagery-ingest && pnpm build",
     "db:migrate": "pnpm --filter @groundwork/api db:migrate",
+    "db:seed": "pnpm build:api-deps && pnpm --filter @groundwork/api db:seed",
     "db:migrate:down": "pnpm --filter @groundwork/api db:migrate:down",
     "worker": "pnpm --filter @groundwork/api worker",
     "format": "prettier --write ."
@@ -38,6 +40,7 @@
     ]
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.65.1",
     "@types/node": "^24.19.4",

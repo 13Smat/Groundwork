@@ -20,6 +20,8 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 
 import type { GeoJsonGeometry } from "@groundwork/geo";
 
+import { labelMapControls } from "../map-a11y";
+
 import {
   applyAssistMode,
   bindAssistPointers,
@@ -778,6 +780,7 @@ export function TakeoffMap({
               onPoint: (lng, lat) => onAssistPointRef.current?.(lng, lat),
               onBox: (box) => onAssistBoxRef.current?.(box),
             });
+            labelMapControls(map.getContainer());
             onReadyRef.current(api);
             setStatus("Map ready");
             setGeneration((value) => value + 1);

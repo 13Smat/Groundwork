@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next free number is 0022. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. Takeoff tools and export are 0017. Accepting an AI assist draft is 0018. Estimate quantity sync and versions are 0019. Proposal PDFs are 0020. E-sign and the won flow are 0021. Migrations 0013 and 0014 are unused. The CRM UI shipped without a new ADR.
+One ADR per decision. Include the alternatives and why they lost. The next free number is 0023. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. Takeoff tools and export are 0017. Accepting an AI assist draft is 0018. Estimate quantity sync and versions are 0019. Proposal PDFs are 0020. E-sign and the won flow are 0021. Migrations 0013 and 0014 are unused. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |
@@ -25,3 +25,4 @@ One ADR per decision. Include the alternatives and why they lost. The next free 
 | [0019](0019-estimate-sync-and-versions.md) | Estimate quantity sync and versions |
 | [0020](0020-proposal-pdf.md) | Proposal PDF templates and the Playwright worker |
 | [0021](0021-esign-won-flow.md) | E-sign adapter, public options, and the won flow |
+| [0022](0022-onboarding-and-demo-seed.md) | Onboarding flag and the demo seed |

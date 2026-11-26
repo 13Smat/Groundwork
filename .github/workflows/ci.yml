@@ -103,6 +103,9 @@ jobs:
       - name: Proposals
         run: pnpm test:proposals
 
+      - name: Demo seed
+        run: pnpm test:seed
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

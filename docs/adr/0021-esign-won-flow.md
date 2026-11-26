@@ -32,7 +32,7 @@ ADR 0003 chose Dropbox Sign behind one provider interface and left the name as `
 
 - The signed PDF object is written before the transaction commits. A fault after that write rolls the database back and can leave an object with no `file` row.
 - The public and webhook limits are per process.
-- Dropbox Sign's hash does not cover the body. The adapter still requires a matching hash and reads workspace and proposal ids only from that verified payload.
+- Dropbox Sign's hash does not cover the body. The adapter still requires a matching hash and reads workspace and proposal ids only from that verified payload. Before `DropboxSignProvider` is enabled outside local and CI, each signed or declined webhook has to be confirmed by fetching that signature request from the Dropbox Sign API. That check is not in this adapter. `STATUS.md` records it as a go-live gate.
 - `FakeEsignProvider` keeps sent PDFs in memory. A process restart drops them. The won flow for the fake reads the proposal PDF already stored for the workspace.
 - Spec 08's revision suffix, and whether `event_log` should be tenant-scoped, stay in `docs/specs/OPEN-QUESTIONS.md`.
 

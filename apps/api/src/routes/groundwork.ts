@@ -183,6 +183,31 @@ function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
+/**
+ * Feature flags are a map of booleans. A patch changes the keys it names and
+ * leaves the others in place, so saving `ai_assist` does not clear
+ * `onboarding_complete`. An empty object clears the map. Callers turn every
+ * flag off that way, including `ai_assist`.
+ */
+function mergeFeatureFlags(
+  current: unknown,
+  patch: Record<string, boolean>,
+): Record<string, boolean> {
+  if (Object.keys(patch).length === 0) {
+    return {};
+  }
+  const next: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(asRecord(current))) {
+    if (typeof value === "boolean") {
+      next[key] = value;
+    }
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    next[key] = value;
+  }
+  return next;
+}
+
 function asAddress(value: unknown): z.infer<typeof addressSchema> | null {
   if (value === null || value === undefined) {
     return null;
@@ -570,6 +595,19 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
         });
       }
       const row = await withDbContext(ctx.db, { workspaceId, userId: session.id }, async (trx) => {
+        const existing = await trx
+          .selectFrom("workspace")
+          .select("features")
+          .where("id", "=", workspaceId)
+          .executeTakeFirst();
+        if (!existing) {
+          throw notFound("That workspace was not found.");
+        }
+        const features =
+          patch.features === undefined
+            ? undefined
+            : mergeFeatureFlags(existing.features, patch.features);
+        const diff = features === undefined ? patch : { ...patch, features };
         await trx
           .updateTable("workspace")
           .set({
@@ -582,7 +620,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
             ...(patch.logo !== undefined ? { logo: patch.logo } : {}),
             ...(patch.license_number !== undefined ? { license_number: patch.license_number } : {}),
             ...(patch.address !== undefined ? { address: patch.address } : {}),
-            ...(patch.features !== undefined ? { features: patch.features } : {}),
+            ...(features !== undefined ? { features } : {}),
           })
           .where("id", "=", workspaceId)
           .execute();
@@ -592,7 +630,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
           entityType: "workspace",
           entityId: workspaceId,
           action: "update",
-          diff: patch,
+          diff,
         });
         const updated = await trx
           .selectFrom("workspace")

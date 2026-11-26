@@ -422,6 +422,40 @@ describe("auth and workspaces", () => {
     ]);
   });
 
+  it("keeps an existing feature flag when another flag is saved", async () => {
+    const owner = await signUp("Flag Owner");
+    const workspace = await createWorkspace(owner.cookie, "Flag Co");
+    const headers = {
+      ...BROWSER,
+      cookie: owner.cookie,
+      "content-type": "application/json",
+      "x-workspace-id": workspace.id,
+    };
+    const first = await requireApp().inject({
+      method: "PATCH",
+      url: `/workspaces/${workspace.id}`,
+      headers,
+      payload: { features: { onboarding_complete: true } },
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    const second = await requireApp().inject({
+      method: "PATCH",
+      url: `/workspaces/${workspace.id}`,
+      headers,
+      payload: { features: { ai_assist: true } },
+    });
+    expect(second.statusCode, second.body).toBe(200);
+    expect(second.json().features).toEqual({ onboarding_complete: true, ai_assist: true });
+    const cleared = await requireApp().inject({
+      method: "PATCH",
+      url: `/workspaces/${workspace.id}`,
+      headers,
+      payload: { features: {} },
+    });
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    expect(cleared.json().features).toEqual({});
+  });
+
   it("sends a magic link through the mailer", async () => {
     const owner = await signUp("Magic Owner");
     const before = sent.length;
