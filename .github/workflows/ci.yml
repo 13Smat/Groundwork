@@ -137,9 +137,15 @@ jobs:
       - name: Start MinIO
         run: |
           set -eu
-          if ! docker compose up -d --build --wait minio minio-init; then
+          # --wait treats the one-shot init as a failure after it exits 0.
+          # The imagery job hides that because titiler is still starting.
+          if ! docker compose up -d --build --wait minio; then
             docker compose ps -a || true
-            docker compose logs --no-color --timestamps || true
+            docker compose logs --no-color --timestamps minio || true
+            exit 1
+          fi
+          if ! docker compose run --rm --build --no-deps minio-init; then
+            docker compose logs --no-color --timestamps minio || true
             exit 1
           fi
 

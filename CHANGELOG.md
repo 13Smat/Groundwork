@@ -9,7 +9,7 @@
 - Address-first job create looks up `/locations/resolve`, fills the job name from the street, and creates or picks a client. An ungeocodable address can take a pin or typed coordinates. Duplicate warnings from the create response show on the job.
 - Job detail shows number, stage, client, site, bid value, and owner. Tabs cover overview, files and photos, notes and tasks, and activity. Takeoffs, estimates, and proposals are links. Photos upload through the presigned PUT and render from a presigned GET.
 - Clients list and detail (contacts, locations, jobs). Location detail draws the point and parcel on a MapLibre map. The only raster source is the seeded `fixture_rgbir` capture. The map is context, not a measurement.
-- `GET /jobs/:id/activity` reads `audit_log`. File responses include `download_url`. The e2e job starts MinIO so the presigned PUT can store the file. MinIO's default API CORS already allows the office origin; `mc cors set` returns 501 against this server. A document request for `/jobs/:id` stays in the office app. Playwright covers create, lost reason, the illegal transition, upload, and search.
+- `GET /jobs/:id/activity` reads `audit_log`. File responses include `download_url`. The e2e job starts MinIO, then runs the bucket init on its own, so the presigned PUT can store the file. `docker compose up --wait` fails that one-shot after it exits 0. MinIO's default API CORS already allows the office origin; `mc cors set` returns 501 against this server. A document request for `/jobs/:id` stays in the office app. Playwright covers create, lost reason, the illegal transition, upload, and search.
 - Recorded the activity and download-URL gap in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 
 ### Ticket 03 — CRM and jobs API
