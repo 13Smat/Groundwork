@@ -220,8 +220,9 @@ describe("imagery captures and tiles", () => {
       url: `/imagery/captures?locationId=${locationId}`,
       headers: tenantHeaders(),
     });
-    expect(unimplemented.statusCode).toBe(501);
+    expect(unimplemented.statusCode).toBe(404);
     expect(unimplemented.headers["content-type"]).toContain("application/problem+json");
+    expect(unimplemented.json().detail).toContain("No location");
 
     const both = await app.inject({
       method: "GET",

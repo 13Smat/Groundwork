@@ -10,6 +10,7 @@ export default defineConfig({
       "apps/api/test/rls.test.ts",
       "apps/api/test/auth.integration.test.ts",
       "apps/api/test/imagery.integration.test.ts",
+      "apps/api/test/crm.integration.test.ts",
     ],
   },
 });

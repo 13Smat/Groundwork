@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Ticket 03 — CRM and jobs API
+
+- Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0008. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.
+- Job stage changes go through `packages/shared`. Illegal transitions, a missing lost reason, and won without `jobs.force_won` return 409 problem+json. Owner and admin hold that token. Every change writes `audit_log` with the actor and the reason. The first job number in a workspace is `J-1001`.
+- Fixture geocoder and parcel adapters answer without the network or an API key. Parcel hits are cached. Creating a client warns on a duplicate email or phone and still creates the row.
+- Added the CRM and jobs routes, including search and the pipeline summary. Presigned file uploads use the existing MinIO adapter. CI runs `pnpm test:crm` in the `db` job.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Ticket 02 — Auth and workspaces
 
 - Added `0002_auth_workspaces.sql` for `app_user`, `workspace`, the six system roles, sessions, and invites. Better Auth's organization is the workspace. ADR 0007. Primary keys the library compares are text UUIDv7s. `groundwork_auth` is the sign-up connection and cannot be assumed by `groundwork_app`.

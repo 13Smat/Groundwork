@@ -30,6 +30,33 @@ const TENANT_ROUTES = [
   "get /catalog-items",
   "get /imagery/captures",
   "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
+  "get /clients",
+  "post /clients",
+  "get /clients/{id}",
+  "patch /clients/{id}",
+  "delete /clients/{id}",
+  "get /clients/{id}/contacts",
+  "post /clients/{id}/contacts",
+  "patch /contacts/{id}",
+  "delete /contacts/{id}",
+  "get /locations",
+  "post /locations",
+  "get /locations/{id}",
+  "patch /locations/{id}",
+  "post /locations/resolve",
+  "get /jobs",
+  "post /jobs",
+  "get /jobs/{id}",
+  "patch /jobs/{id}",
+  "post /jobs/{id}/transition",
+  "get /jobs/{id}/notes",
+  "post /jobs/{id}/notes",
+  "get /jobs/{id}/tasks",
+  "post /jobs/{id}/tasks",
+  "get /jobs/{id}/files",
+  "post /jobs/{id}/files",
+  "get /search",
+  "get /pipeline/summary",
 ];
 
 type Session = { cookie: string; email: string };
@@ -521,7 +548,10 @@ describe("auth and workspaces", () => {
         }
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
-        const tenantPath = /^\/(workspaces\/|members\/|catalog-items|imagery\/)/.test(path);
+        const tenantPath =
+          /^\/(workspaces\/|members\/|catalog-items|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+            path,
+          );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
           throw new Error(`${key} is missing a tenant tag.`);
         }
@@ -532,6 +562,7 @@ describe("auth and workspaces", () => {
         let url = path
           .replace("/workspaces/{id}", `/workspaces/${workspace.id}`)
           .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`)
+          .replaceAll("{id}", createId())
           .replace("{captureId}", createId())
           .replace("{z}", "1")
           .replace("{x}", "0")
@@ -539,14 +570,10 @@ describe("auth and workspaces", () => {
         if (path === "/imagery/captures") {
           url += "?bbox=-81.95,35.52,-81.40,35.99";
         }
-        const payload =
-          key === "post /workspaces/{id}/invites"
-            ? { email: "nobody@example.com", roleId: ownerProfile.body.memberships[0]?.role_id }
-            : key === "patch /workspaces/{id}"
-              ? { name: "Nope" }
-              : key === "patch /members/{id}"
-                ? { status: "disabled" }
-                : undefined;
+        if (path === "/search") {
+          url += "?q=hidden";
+        }
+        const payload = tenantPayload(key, ownerProfile.body.memberships[0]?.role_id);
         const response = await requireApp().inject({
           method: method.toUpperCase() as "GET",
           url,
@@ -573,3 +600,45 @@ describe("auth and workspaces", () => {
     expect(outsiderProfile.body.memberships[0]?.workspace_id).toBe(other.id);
   });
 });
+
+function tenantPayload(
+  key: string,
+  roleId: string | undefined,
+): Record<string, unknown> | undefined {
+  switch (key) {
+    case "post /workspaces/{id}/invites":
+      return { email: "nobody@example.com", roleId };
+    case "patch /workspaces/{id}":
+      return { name: "Nope" };
+    case "patch /members/{id}":
+      return { status: "disabled" };
+    case "post /clients":
+      return { name: "Hidden", type: "residential" };
+    case "patch /clients/{id}":
+      return { name: "Hidden" };
+    case "post /clients/{id}/contacts":
+      return { name: "Hidden" };
+    case "patch /contacts/{id}":
+      return { name: "Hidden" };
+    case "post /locations":
+      return { client_id: createId(), address: { line1: "1 Main St" } };
+    case "patch /locations/{id}":
+      return { notes: "no" };
+    case "post /locations/resolve":
+      return { address: "100 Main St, Morganton, NC 28655" };
+    case "post /jobs":
+      return { name: "Hidden", client: { name: "Hidden", type: "residential" } };
+    case "patch /jobs/{id}":
+      return { name: "Hidden" };
+    case "post /jobs/{id}/transition":
+      return { to: "lost", reason: "price" };
+    case "post /jobs/{id}/notes":
+      return { body: "note" };
+    case "post /jobs/{id}/tasks":
+      return { title: "task" };
+    case "post /jobs/{id}/files":
+      return { mime: "image/png" };
+    default:
+      return undefined;
+  }
+}

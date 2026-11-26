@@ -14,6 +14,7 @@
     "test": "turbo run build --filter=@groundwork/shared && vitest run",
     "test:rls": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.rls.config.ts",
     "test:auth": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.auth.config.ts",
+    "test:crm": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.crm.config.ts",
     "test:e2e": "turbo run build --filter=@groundwork/shared && playwright test",
     "test:imagery": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.imagery.config.ts",
     "test:tiles": "python3 -m unittest services/tiles/tests/test_guard.py",
