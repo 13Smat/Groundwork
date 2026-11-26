@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Spec 06 part 2 — Catalog grid, recipe builder, and starter pack
+
+- The office catalog screen has a tab per kind, an inline grid, and a detail drawer. Arrow keys move between cells. Roles without `catalog.manage` do not see the unit cost column, and the grid is read only for them.
+- CSV import previews SKU adds and updates before apply. Export downloads the same columns the API already writes.
+- Takeoff items can be added and edited (name, measure kind, default unit, color, category).
+- The recipe builder edits the input unit, variables, and component formulas. `POST /formula/validate` reports the error and its position next to the formula. A test quantity calls `POST /cost-recipes/:id/preview`. Saving an active recipe opens version n+1 as a draft and leaves the previous version as it was. Activating a draft uses the existing transition.
+- `db/seed/starter-pack.json` is a clean-room paving and landscaping pack. `POST /catalog-items/starter-pack` inserts it for the current workspace and skips rows that are already there. Recipes start as drafts. ADR 0011.
+- Playwright covers formula validation, live preview, versioning, the CSV diff, and an office member versus an estimator on unit cost.
+
 ### Spec 06 part 1 — Catalog, cost recipes, and the formula engine
 
 - Added `packages/pricing`, a recursive-descent formula parser and evaluator. Operators are `+ - * / ^` and comparisons. Functions are `ceil`, `floor`, `round`, `min`, `max`, and `if`. Built-in takeoff variables come from the input unit. `decimal.js` keeps the math exact. Half-even rounding is only at integer cents and inside `round`. The parser does not call `eval` or `Function`. A complexity cap stops a hostile formula inside 50 ms.

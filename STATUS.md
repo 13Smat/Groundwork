@@ -1,6 +1,6 @@
 # Status
 
-Catalog and cost recipes (spec 06, part 1) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Catalog and cost recipes (spec 06, part 2) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -15,6 +15,7 @@ Catalog and cost recipes (spec 06, part 1) is the current slice. Owner: Andy Sil
 - `packages/pricing` evaluates recipe formulas with a recursive-descent parser and `decimal.js`. There is no `eval`. Unit factors are exact ratios in `packages/geo`. Money rounds half-even to cents in `previewRecipe`, which the estimate engine will call later.
 - Cost recipe transitions live in `packages/shared`. `draft -> active -> archived`. Editing an active recipe creates version n+1 as a draft. Activating it archives the previous active version. Illegal transitions return 409.
 - `/catalog-items` (including CSV import and export), `/takeoff-items`, `/cost-recipes` (versions and preview), and `POST /formula/validate` use the session and membership guard. A recipe linked to a takeoff item of a different measure kind returns 409. A referenced catalog item is archived instead of deleted. Responses for roles without `catalog.manage` omit `unit_cost_cents` and preview costs.
+- The office catalog screen is the kind tabs, the inline grid, the detail drawer, and the CSV import wizard. Unit cost is omitted from the grid when the membership lacks `catalog.manage`. Takeoff items and the recipe builder are on the same section. Saving an active recipe opens version n+1 as a draft. `POST /catalog-items/starter-pack` loads `db/seed/starter-pack.json` and skips SKUs, takeoff names, and recipe names that are already there. ADR 0011. Playwright covers formula validation, preview, versioning, the CSV diff, and the office versus estimator cost column.
 - Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
 - Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
 - Tenant routes return 404 when the session is not an active member.
@@ -24,9 +25,8 @@ Catalog and cost recipes (spec 06, part 1) is the current slice. Owner: Andy Sil
 ## Not in this slice
 
 - TODO: `takeoff_item` has no foreign key to `job` or `location`. CRM lands those tables in its own migration. Do not add the key in `0006`.
-- The office catalog screen. It is still the placeholder.
-- Estimate snapshots. Spec 07 must call `previewRecipe` so a saved total matches the preview. This slice does not create estimates, so it cannot prove that editing a recipe leaves a `ready` or `sent` estimate unchanged.
-- Assemblies of assemblies, price lists, vendor feeds, and the spreadsheet grid.
+- Estimate snapshots. Spec 07 must call `previewRecipe` so a saved total matches the preview. The recipe screen keeps the previous version's formula when a new draft is saved. A saved estimate total is still spec 07.
+- Assemblies of assemblies, price lists, and vendor feeds.
 - `output_unit`. The column is `input_unit`. The entity table still says `output_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - `locationId` resolution. The location table is spec 03.
 - A county boundary table. A county FIPS is accepted, and the raster footprint is not checked against a county polygon.

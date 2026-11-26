@@ -25,6 +25,9 @@ import {
   signOut,
 } from "./pages";
 import { ImageryRoute } from "./admin/imagery-route";
+import { CatalogRoute } from "./catalog/catalog-route";
+import { RecipeCreateRoute, RecipeEditorRoute, RecipeIndexRoute } from "./catalog/recipe-route";
+import { TakeoffRoute } from "./catalog/takeoff-route";
 import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
 
 const NAV = [
@@ -65,6 +68,12 @@ function titleFor(pathname: string): string {
   }
   if (pathname.startsWith("/invites/")) {
     return "Accept invite";
+  }
+  if (pathname.startsWith("/catalog/recipes")) {
+    return "Cost recipes";
+  }
+  if (pathname === "/catalog/takeoff") {
+    return "Takeoff items";
   }
   if (pathname in TITLES) {
     return TITLES[pathname as OfficePath];
@@ -201,7 +210,34 @@ const takeoffRoute = createRoute({
 const catalogRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/catalog",
-  component: placeholder("No catalog records are loaded in this slice."),
+  component: CatalogRoute,
+});
+
+const takeoffItemsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/takeoff",
+  component: TakeoffRoute,
+});
+
+const recipeIndexRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes",
+  component: RecipeIndexRoute,
+});
+
+const recipeCreateRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes/new",
+  component: RecipeCreateRoute,
+});
+
+const recipeEditRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes/$recipeId",
+  component: function RecipeEditPage() {
+    const { recipeId } = recipeEditRoute.useParams();
+    return <RecipeEditorRoute recipeId={recipeId} />;
+  },
 });
 
 const estimatesRoute = createRoute({
@@ -275,6 +311,10 @@ const routeTree = rootRoute.addChildren([
     jobsRoute,
     takeoffRoute,
     catalogRoute,
+    takeoffItemsRoute,
+    recipeIndexRoute,
+    recipeCreateRoute,
+    recipeEditRoute,
     estimatesRoute,
     proposalsRoute,
     scheduleRoute,

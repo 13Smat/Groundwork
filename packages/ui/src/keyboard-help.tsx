@@ -11,6 +11,10 @@ export function KeyboardHelp() {
         <ul className="list-disc space-y-2 pl-5 text-base leading-relaxed">
           <li>Tab moves between the skip link, the navigation, and this button.</li>
           <li>Arrow keys move between navigation links. Home and End jump to the ends.</li>
+          <li>
+            On the catalog grid, arrow keys move between cells. Escape restores the cell you were
+            editing.
+          </li>
           <li>Escape closes this dialog.</li>
         </ul>
         <DialogClose asChild>
