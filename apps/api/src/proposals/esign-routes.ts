@@ -223,7 +223,7 @@ export async function registerEsignRoutes(
     "/proposals/:id/send",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: z.object({ id: z.uuidv7() }),
         body: z.object({
           recipients: z

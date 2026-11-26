@@ -90,6 +90,9 @@ export async function createIngest(
   idempotencyKey: string | undefined,
   dispatch: IngestDispatch | undefined,
 ): Promise<{ job: IngestJobResponse; created: boolean }> {
+  await withImageryAdminContext(db, workspaceId, (trx) =>
+    assertSourceCanIngest(trx, workspaceId, body),
+  );
   if (!dispatch) {
     throw new ProblemError({
       status: 503,
@@ -192,7 +195,7 @@ async function insertOrReplay(
       if (existing) {
         return replay(existing, hash);
       }
-      await assertSourceCanIngest(trx, body);
+      await assertSourceCanIngest(trx, workspaceId, body);
       if (body.aoi) {
         await assertAoiArea(trx, JSON.stringify(body.aoi));
       }
@@ -230,7 +233,11 @@ function replay(
   return { jobId: existing.id, created: false };
 }
 
-async function assertSourceCanIngest(trx: Transaction<Database>, body: IngestBody): Promise<void> {
+async function assertSourceCanIngest(
+  trx: Transaction<Database>,
+  workspaceId: string,
+  body: IngestBody,
+): Promise<void> {
   const result = await sql<{
     id: string;
     provider: string;
@@ -241,6 +248,10 @@ async function assertSourceCanIngest(trx: Transaction<Database>, body: IngestBod
     select id::text as id, provider, name, allows_tracing, (verified_at is not null) as verified
     from imagery_source
     where id = ${body.sourceId}::uuid
+      and (
+        workspace_id is null
+        or workspace_id = ${workspaceId}::uuid
+      )
   `.execute(trx);
   const source = result.rows[0];
   if (!source) {
@@ -713,6 +724,8 @@ export async function listImagerySources(
         case when coverage is null then null else st_xmax(coverage) end as east,
         case when coverage is null then null else st_ymax(coverage) end as north
       from imagery_source
+      where workspace_id is null
+         or workspace_id = ${workspaceId}::uuid
       order by provider, name
     `.execute(trx);
     return result.rows.map(toSource);
@@ -806,6 +819,10 @@ export async function patchImagerySource(
         null::float8 as north
       from imagery_source
       where id = ${sourceId}::uuid
+        and (
+          workspace_id is null
+          or workspace_id = ${workspaceId}::uuid
+        )
     `.execute(trx);
     const row = current.rows[0];
     if (!row) {
@@ -831,6 +848,10 @@ export async function patchImagerySource(
           notes = ${body.notes === undefined ? row.notes : body.notes},
           updated_at = now()
       where id = ${sourceId}::uuid
+        and (
+          workspace_id is null
+          or workspace_id = ${workspaceId}::uuid
+        )
     `.execute(trx);
     const updated = await sql<SourceSql>`
       select
@@ -854,6 +875,10 @@ export async function patchImagerySource(
         case when coverage is null then null else st_ymax(coverage) end as north
       from imagery_source
       where id = ${sourceId}::uuid
+        and (
+          workspace_id is null
+          or workspace_id = ${workspaceId}::uuid
+        )
     `.execute(trx);
     const next = updated.rows[0];
     if (!next) {

@@ -22,8 +22,47 @@ function titleFor(status: number): string {
   return TITLES[status] ?? "Error";
 }
 
-function sendProblem(reply: FastifyReply, body: Problem) {
-  return reply.status(body.status).type(PROBLEM_JSON_CONTENT_TYPE).send(body);
+const SQL_LEAK =
+  /\b(select\s+[\s\S]{0,200}\s+from|insert\s+into|update\s+[a-z_][\w.]*\s+set|delete\s+from)\b/i;
+const STACK_LEAK = /\n\s+at\s+/;
+
+/**
+ * Production responses keep a caller's own validation and conflict text.
+ * A 500, a stack, or SQL is replaced so a database error cannot leave the process.
+ */
+function clientDetail(
+  status: number,
+  detail: string | undefined,
+  safeDetail: boolean,
+): string | undefined {
+  if (detail === undefined) {
+    return undefined;
+  }
+  const leak = SQL_LEAK.test(detail) || STACK_LEAK.test(detail);
+  if (process.env.NODE_ENV === "production" && (leak || (status >= 500 && !safeDetail))) {
+    return status >= 500 ? "An unexpected error occurred." : "The request could not be completed.";
+  }
+  return detail;
+}
+
+function forClient(body: Problem, safeDetail: boolean): Problem {
+  const detail = clientDetail(body.status, body.detail, safeDetail);
+  const errors = body.errors?.map((error) => {
+    const message = clientDetail(body.status, error.message, true);
+    return message === undefined ? error : { ...error, message };
+  });
+  return {
+    ...body,
+    ...(detail !== undefined ? { detail } : {}),
+    ...(errors ? { errors } : {}),
+  };
+}
+
+function sendProblem(reply: FastifyReply, body: Problem, safeDetail: boolean) {
+  return reply
+    .status(body.status)
+    .type(PROBLEM_JSON_CONTENT_TYPE)
+    .send(forClient(body, safeDetail));
 }
 
 /**
@@ -72,6 +111,7 @@ export function registerProblemHandlers(app: FastifyInstance): void {
         detail: `No route for ${request.method} ${request.url}.`,
         instance: request.url,
       }),
+      true,
     );
   });
 
@@ -79,10 +119,14 @@ export function registerProblemHandlers(app: FastifyInstance): void {
     const instance = request.url;
 
     if (isProblemError(error)) {
-      sendProblem(reply, {
-        ...error.problemBody,
-        instance: error.problemBody.instance ?? instance,
-      });
+      sendProblem(
+        reply,
+        {
+          ...error.problemBody,
+          instance: error.problemBody.instance ?? instance,
+        },
+        true,
+      );
       return;
     }
 
@@ -106,6 +150,7 @@ export function registerProblemHandlers(app: FastifyInstance): void {
           instance,
           errors,
         }),
+        true,
       );
       return;
     }
@@ -120,6 +165,7 @@ export function registerProblemHandlers(app: FastifyInstance): void {
           detail: "The response did not match the schema.",
           instance,
         }),
+        true,
       );
       return;
     }
@@ -143,6 +189,7 @@ export function registerProblemHandlers(app: FastifyInstance): void {
         detail,
         instance,
       }),
+      false,
     );
   });
 }

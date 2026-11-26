@@ -40,6 +40,17 @@ jobs:
       - name: Check
         run: pnpm check
 
+      - name: OpenAPI breaking changes
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          if git cat-file -e "origin/${{ github.base_ref }}:apps/api/openapi.json"; then
+            git show "origin/${{ github.base_ref }}:apps/api/openapi.json" > /tmp/openapi-base.json
+          else
+            printf '%s\n' '{"openapi":"3.1.0","info":{"title":"Groundwork API","version":"0.0.0"},"paths":{}}' > /tmp/openapi-base.json
+          fi
+          OPENAPI_BASE=/tmp/openapi-base.json pnpm --filter @groundwork/api openapi:breaking
+
   db:
     name: db
     runs-on: ubuntu-latest
@@ -105,6 +116,9 @@ jobs:
 
       - name: Demo seed
         run: pnpm test:seed
+
+      - name: OpenAPI tenant and problem contracts
+        run: pnpm test:contracts
 
   e2e:
     name: e2e

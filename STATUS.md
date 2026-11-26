@@ -1,8 +1,22 @@
 # Status
 
-MVP hardening (onboarding, the demo seed, and the full-slice check) is the current slice. Proposals and e-sign (spec 08, part 2) are on main. Map takeoff tools and export (spec 04, part 3), AI takeoff assist acceptance (spec 05, part 2), estimating quantity sync (spec 07, part 2), the takeoff editor (spec 04, part 2), estimating (spec 07, part 1), AI takeoff assist (spec 05, part 1), catalog and cost recipes (spec 06, part 2), takeoff and measurements (spec 04, part 1), and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+MVP hardening 2 (OpenAPI drift, the tenant 404 sweep, and the error contract) is the current slice. Hardening 1 (onboarding, the demo seed, and the full-slice check) is on main, along with proposals and e-sign (spec 08, part 2), map takeoff tools and export (spec 04, part 3), AI takeoff assist acceptance (spec 05, part 2), estimating quantity sync (spec 07, part 2), the takeoff editor (spec 04, part 2), estimating (spec 07, part 1), AI takeoff assist (spec 05, part 1), catalog and cost recipes (spec 06, part 2), takeoff and measurements (spec 04, part 1), and CRM and jobs (spec 03). Owner: Andy Silver. The agent opens a draft PR and does not merge.
+
+## MVP readiness
+
+The office path from sign-up through a won job is on main: auth and workspaces, CRM, catalog and recipes, imagery registry and ingest, takeoff and assist, estimating, proposal PDFs, the fake e-sign provider, onboarding, and the demo seed. This slice adds the contract checks those routes have to keep passing. `apps/api/openapi.json` is committed. CI regenerates it and fails on a stale file or a breaking change unless `info.version` is bumped. A workspace A session gets 404 for every tenant operation aimed at a workspace B id. Tables with `workspace_id NOT NULL` are forced behind row security, and production problem responses do not include SQL or a stack.
+
+Known follow-ups, not part of this slice:
+
+- Dropbox Sign stays off until each signed or declined webhook is confirmed by fetching the signature request. `event_hash` does not cover the body. ADR 0021. `DROPBOX_SIGN_API_KEY` stays empty.
+- The signed PDF object is written before the transaction commits. A fault after that write rolls the database back and can leave an object with no `file` row. ADR 0021.
+- Public and webhook routes allow 30 calls per 10 seconds per address per process. Measurement tiles allow 30 calls per 10 seconds per workspace per process. Two processes do not share a counter.
+- Map takeoff follow-ups: parcel search stays capped at 50 rows within 2 km of the site, snap can pull a hole onto the outer ring, and the PNG export does not read COG pixels.
+- SaaS self-billing is deferred. `docs/specs/README.md` lists it and there is no module spec. `docs/specs/OPEN-QUESTIONS.md` records that. This slice does not guess a plan or an invoice.
 
 ## Done
+
+- MVP hardening 2 is migration `0018_member_role_invoker.sql` and ADR 0023. `member_fill_role_id` is `SECURITY INVOKER`. Imagery admin policies match a global row or the caller's workspace, so workspace A cannot patch or ingest workspace B's source. `apps/api/openapi.json` is the canonical document. `pnpm openapi:check` fails when it is stale. A pull request also fails on a breaking change unless `info.version` changes. `pnpm test:contracts` walks the document: workspace A gets 404 problem+json for every foreign tenant operation, and validation and illegal transitions return problem+json. The schema audit is part of `pnpm test:rls`. Production problem details that contain SQL or a stack are replaced. Assist, detection review, and ingest look up the tenant row before they return 403 or 503.
 
 - Ticket 0 through Ticket 2 are on main (`dabcba3`): agent rules, the monorepo, CI, Postgres/PostGIS, MinIO, the `groundwork_app` role, `withWorkspaceContext`, and the office shell. ADR 0001 through ADR 0005.
 - Imagery registry and TiTiler are on main (`2fe041f`). Migration `0003_imagery.sql`, the fixture COG, and the guarded tile service. ADR 0006. `/imagery/*` uses the session and membership check. `x-workspace-id` still names the workspace.
@@ -28,7 +42,7 @@ MVP hardening (onboarding, the demo seed, and the full-slice check) is the curre
 - Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
 - Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
 - Tenant routes return 404 when the session is not an active member.
-- CI `check` installs Playwright Chromium, then runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The PDF unit test is in `pnpm test`. The `db` job migrates and runs RLS, auth, CRM, takeoff, estimating, proposal, and demo-seed tests. The `imagery` job installs the ingest venv, runs the CV contract tests, the chip-crop unittest, and the assist API test, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
+- CI `check` installs Playwright Chromium, then runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, build, and `pnpm openapi:check`. A pull request also compares `apps/api/openapi.json` with the base. The PDF unit test is in `pnpm test`. The `db` job migrates and runs RLS, auth, CRM, takeoff, estimating, proposal, demo-seed, and `pnpm test:contracts`. The `imagery` job installs the ingest venv, runs the CV contract tests, the chip-crop unittest, and the assist API test, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
 
 ## Go-live gate
 

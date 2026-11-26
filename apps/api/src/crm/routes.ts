@@ -1153,6 +1153,7 @@ export async function registerCrmRoutes(
     {
       schema: {
         ...tenant,
+        tags: ["tenant-header", "state-machine"],
         params: idParams,
         body: z.object({
           to: stageSchema,

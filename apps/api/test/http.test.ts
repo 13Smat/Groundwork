@@ -28,6 +28,34 @@ describe("HTTP", () => {
         detail: "The transition is not allowed.",
       });
     });
+    app.get("/sql", async () => {
+      throw new ProblemError({
+        status: 500,
+        title: "Internal Server Error",
+        detail: "insert into secret (token) values ('sk_live')",
+      });
+    });
+    app.get("/stack", async () => {
+      throw new ProblemError({
+        status: 500,
+        title: "Internal Server Error",
+        detail: "boom\n    at leak (handler.ts:1:1)",
+      });
+    });
+    app.get("/cents", async () => {
+      throw new ProblemError({
+        status: 500,
+        title: "Internal Server Error",
+        detail: "Stored cents were not an integer.",
+      });
+    });
+    app.get("/leaked-conflict", async () => {
+      throw new ProblemError({
+        status: 409,
+        title: "Conflict",
+        detail: "select token from secret where id = '1'",
+      });
+    });
   });
 
   afterAll(async () => {
@@ -103,5 +131,37 @@ describe("HTTP", () => {
       detail: "The transition is not allowed.",
       instance: "/conflict",
     });
+  });
+
+  it("hides SQL and stack traces when NODE_ENV is production", async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const sql = await app.inject({ method: "GET", url: "/sql" });
+      expect(sql.statusCode).toBe(500);
+      expect(sql.json()).toMatchObject({
+        status: 500,
+        detail: "An unexpected error occurred.",
+      });
+      expect(sql.body).not.toContain("secret");
+
+      const stack = await app.inject({ method: "GET", url: "/stack" });
+      expect(stack.json()).toMatchObject({ detail: "An unexpected error occurred." });
+      expect(stack.body).not.toContain("handler.ts");
+
+      const cents = await app.inject({ method: "GET", url: "/cents" });
+      expect(cents.json()).toMatchObject({ detail: "Stored cents were not an integer." });
+
+      const leaked = await app.inject({ method: "GET", url: "/leaked-conflict" });
+      expect(leaked.statusCode).toBe(409);
+      expect(leaked.json()).toMatchObject({ detail: "The request could not be completed." });
+      expect(leaked.body).not.toContain("select");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previous;
+      }
+    }
   });
 });

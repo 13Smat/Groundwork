@@ -23,3 +23,5 @@ A new tenant table enables and forces row level security in its own migration, g
 `0016_proposals.sql` adds `proposal_template`, `proposal`, and `signature`. All three use the foundations policy and are granted to `groundwork_app` only. `0007`, `0008`, `0010`, and `0013` through `0015` stay unused. pg-boss already owns the `pgboss` schema. ADR 0020.
 
 `0017_esign_work_order.sql` adds `work_order` and `proposal_token`, and replaces `proposal_before_update` so a rendered proposal can record optional items, expiry, recipients, and a new public hash. Both new tables use the foundations policy and are granted to `groundwork_app` only. `proposal_token` also has a SELECT policy on `app.proposal_token_hash`. `event_log` is unchanged. ADR 0021.
+
+`0018_member_role_invoker.sql` replaces `member_fill_role_id` as `SECURITY INVOKER`. System roles stay readable under the role policy, so the trigger does not need definer rights. It also replaces the imagery admin policies from `0004`: `app.imagery_admin` can read and write a global imagery row or the caller's row, and an ingest job is visible only in the caller's workspace. ADR 0023.

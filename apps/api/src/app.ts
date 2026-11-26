@@ -65,6 +65,7 @@ export async function buildApp(options?: {
     "/healthz",
     {
       schema: {
+        tags: ["meta"],
         response: {
           200: z.object({
             status: z.literal("ok"),
@@ -75,7 +76,15 @@ export async function buildApp(options?: {
     async () => ({ status: "ok" as const }),
   );
 
-  app.get("/openapi.json", async () => app.swagger());
+  app.get(
+    "/openapi.json",
+    {
+      schema: {
+        tags: ["meta"],
+      },
+    },
+    async () => app.swagger(),
+  );
 
   if (options?.database) {
     const db = options.imagery?.db ?? createDb(options.database.app);

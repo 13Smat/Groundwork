@@ -16,6 +16,7 @@ describe("migration files", () => {
       "0012_detection.sql",
       "0016_proposals.sql",
       "0017_esign_work_order.sql",
+      "0018_member_role_invoker.sql",
     ]);
   });
 });

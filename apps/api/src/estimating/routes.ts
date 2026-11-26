@@ -484,7 +484,7 @@ export async function registerEstimateRoutes(app: ApiApp, ctx: EstimateContext):
     "/estimates/:id/transition",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: z.object({ id: z.uuidv7() }),
         body: z.object({ to: z.enum(STATUSES) }),
         response: { 200: estimateSchema },
