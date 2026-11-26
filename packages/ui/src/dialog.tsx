@@ -9,15 +9,31 @@ export function DialogContent({
   title,
   description,
   children,
+  initialFocusId,
 }: {
   title: string;
   description: string;
   children?: ReactNode;
+  /** Move focus to this control when the dialog opens. */
+  initialFocusId?: string;
 }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/40" />
-      <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-md bg-paper p-6 text-ink shadow-lg focus:outline-none">
+      <DialogPrimitive.Content
+        className="fixed left-1/2 top-1/2 z-50 w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-md bg-paper p-6 text-ink shadow-lg focus:outline-none"
+        onOpenAutoFocus={(event) => {
+          if (!initialFocusId) {
+            return;
+          }
+          const node = document.getElementById(initialFocusId);
+          if (!(node instanceof HTMLElement)) {
+            return;
+          }
+          event.preventDefault();
+          node.focus();
+        }}
+      >
         <DialogPrimitive.Title className="text-xl font-semibold">{title}</DialogPrimitive.Title>
         <DialogPrimitive.Description className="mt-2 text-base leading-relaxed text-muted">
           {description}

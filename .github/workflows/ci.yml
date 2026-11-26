@@ -134,6 +134,15 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Start MinIO
+        run: |
+          set -eu
+          if ! docker compose up -d --build --wait minio minio-init; then
+            docker compose ps -a || true
+            docker compose logs --no-color --timestamps || true
+            exit 1
+          fi
+
       - name: Playwright
         run: pnpm test:e2e
 

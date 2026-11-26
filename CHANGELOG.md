@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Ticket 03 — CRM and jobs UI
+
+- Office pipeline board for Lead, Estimating, Proposed, Won, and Lost. Column counts and bid totals come from `GET /pipeline/summary`. A card can be dragged, and Move changes the stage from the keyboard. Lost asks for a reason. A 409 stays on the screen as an alert and the card does not move.
+- Jobs list filters by stage, owner, updated date, and tag. The search box calls `GET /search`.
+- Address-first job create looks up `/locations/resolve`, fills the job name from the street, and creates or picks a client. An ungeocodable address can take a pin or typed coordinates. Duplicate warnings from the create response show on the job.
+- Job detail shows number, stage, client, site, bid value, and owner. Tabs cover overview, files and photos, notes and tasks, and activity. Takeoffs, estimates, and proposals are links. Photos upload through the presigned PUT and render from a presigned GET.
+- Clients list and detail (contacts, locations, jobs). Location detail draws the point and parcel on a MapLibre map. The only raster source is the seeded `fixture_rgbir` capture. The map is context, not a measurement.
+- `GET /jobs/:id/activity` reads `audit_log`. File responses include `download_url`. The e2e job starts MinIO so the presigned PUT can store the file. MinIO's default API CORS already allows the office origin; `mc cors set` returns 501 against this server. A document request for `/jobs/:id` stays in the office app. Playwright covers create, lost reason, the illegal transition, upload, and search.
+- Recorded the activity and download-URL gap in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Ticket 03 — CRM and jobs API
 
 - Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0009. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.

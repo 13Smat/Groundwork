@@ -800,6 +800,30 @@ export async function insertJobFile(
   return row;
 }
 
+export type JobActivityRecord = {
+  id: string;
+  actor_member_id: string | null;
+  action: string | null;
+  diff: unknown;
+  at: Date | null;
+};
+
+export async function listJobActivity(trx: Db, jobId: string): Promise<JobActivityRecord[]> {
+  const result = await sql<JobActivityRecord>`
+    select
+      id::text as id,
+      actor_member_id::text as actor_member_id,
+      action,
+      diff,
+      at
+    from audit_log
+    where entity_type = 'job'
+      and entity_id = ${jobId}::uuid
+    order by id
+  `.execute(trx);
+  return result.rows;
+}
+
 export async function pipelineSummary(
   trx: Db,
   assigned: string | null,
