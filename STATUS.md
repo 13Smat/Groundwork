@@ -1,6 +1,6 @@
 # Status
 
-Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and measurements (spec 04, part 1) and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Map takeoff editor (spec 04, part 2) is the current slice. Catalog and cost recipes (spec 06, part 2), takeoff and measurements (spec 04, part 1), and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -16,6 +16,7 @@ Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and mea
 - Fastify routes for clients, contacts, locations, resolve, jobs, transitions, notes, tasks, presigned files, search, and the pipeline summary. Creating a client warns on a duplicate email or phone and still creates the row.
 - The office app has the pipeline board, jobs list, address-first job create, job detail, clients, and a location context map. Column totals come from `/pipeline/summary`. Lost asks for a reason. A 409 is shown and the card stays put. File rows include a presigned `download_url`. `GET /jobs/:id/activity` reads `audit_log`. The map uses MapLibre and only the seeded `fixture_rgbir` tile. Playwright covers create, the lost reason, the illegal transition, upload, and search.
 - Takeoff measurements are migration `0009_takeoff.sql`. `takeoff` and `measurement` force row security and reference the `takeoff_item` table from `0006`. ADR 0013. `Takeoff.status` is `draft -> in_review -> final`, and `final -> draft` inserts the next version. PostGIS geography is the stored area and length. Turf in `packages/geo` is the live-feedback helper. A source with `allows_tracing = false` or a null `verified_at` is 403. A capture that is not `ready` is 409.
+- The takeoff editor is a lazy route on the job. ADR 0014. It draws with MapLibre and Terra Draw on `/imagery/tiles/:captureId/{z}/{x}/{y}`, lists only captures the API already marked traceable and verified, and saves through the existing measurement routes. The server summary replaces the live total after a save. The parcel is a reference layer and does not clip. The measure ruler is not saved. There is no takeoff list route. Playwright covers a polygon, a line, a point, the age warning, the block when nothing covers the site, and the NAIP banner.
 - Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
 - Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
 - Tenant routes return 404 when the session is not an active member.
@@ -31,7 +32,7 @@ Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and mea
 - `output_unit`. The column is `input_unit`. The entity table still says `output_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - A county boundary table. A county FIPS is accepted, and the raster footprint is not checked against a county polygon.
 - A live NC or NAIP download in CI. The fetcher exists and stays off.
-- The takeoff map editor, PNG export, undo/redo, and proposal PDF attribution. This slice is the API and the PostGIS tests.
+- Holes, snap, undo/redo, PNG export, multi-parcel select, and proposal PDF attribution. The editor in this slice is select, polygon, line, point, and a measure-only ruler.
 - `sheet_geom`, `planset_sheet`, and plan-set scale. Spec 12 owns those. A measurement in this slice is geographic.
 - AI assist and AI auto drawing. The `source` values exist. Nothing writes them yet.
 - Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.

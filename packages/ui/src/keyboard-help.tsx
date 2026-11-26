@@ -17,6 +17,11 @@ export function KeyboardHelp() {
           </li>
           <li>On a job, Move changes the stage. Lost asks for a reason before it saves.</li>
           <li>Arrow keys move between a job's tabs. Escape closes this dialog.</li>
+          <li>
+            On a takeoff, the drawing tool radios choose select, polygon, line, point, or the
+            measure ruler. Finish shape or Enter completes the shape. The ruler is not saved.
+            Quantity summary opens the totals.
+          </li>
         </ul>
         <DialogClose asChild>
           <Button className="mt-4" variant="primary">

@@ -180,6 +180,10 @@ Display rounding names ft², yd², and ft. Acres are in the builder rules and ha
 
 `PATCH /takeoffs/:id` requires confirm before changing the capture on a takeoff that already has measurements. The spec does not name the field. The body uses `confirm: true`. JSON is snake_case (`location_id`, `imagery_capture_id`), matching the routes from ADR 0007. The spec table writes `locationId` and `imageryCaptureId`. The spec files were not edited.
 
+## Takeoff list
+
+Spec 04 describes the editor and does not name a list of takeoffs for a job. This slice does not add `GET /jobs/:id/takeoffs`. The office remembers ids created in this browser in `sessionStorage` and opens `/jobs/$jobId/takeoffs/$takeoffId` directly. A takeoff created in another browser is not listed. [ADR 0014](../adr/0014-takeoff-editor.md). The spec files were not edited.
+
 ## Activity list and file download URL
 
 Spec 03's job page includes an Activity tab and Files/Photos. The API table does not name a read for `audit_log` or a way for the browser to GET a stored object. This UI reads `GET /jobs/:id/activity` (actor, action, `at`, and the stage diff already written by ADR 0009) and adds `download_url` on the file payload, signed the same way as the upload URL. The presign lifetime is still the open question above. The spec files were not edited.

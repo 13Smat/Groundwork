@@ -10,6 +10,7 @@ import { SiteMap } from "./site-map";
 import { StageMove } from "./stage-move";
 import type { ActivityEvent, Job, JobFile, Location, Note, Task } from "./types";
 import { takeWarnings } from "./warnings";
+import { TakeoffsPanel } from "../takeoff/start";
 import { useMembers, useWorkspace } from "./workspace";
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { id: "files", label: "Files and photos" },
   { id: "notes", label: "Notes and tasks" },
   { id: "activity", label: "Activity" },
+  { id: "takeoffs", label: "Takeoffs" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -179,7 +181,11 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
         </div>
         <ul className="flex flex-wrap gap-4 pb-2">
           <li>
-            <Link to="/takeoff" className="text-base font-semibold underline">
+            <Link
+              to="/jobs/$jobId/takeoffs"
+              params={{ jobId }}
+              className="text-base font-semibold underline"
+            >
               Takeoffs
             </Link>
           </li>
@@ -213,6 +219,11 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
       {tab === "activity" ? (
         <div role="tabpanel" id="panel-activity" aria-labelledby="tab-activity" tabIndex={0}>
           <ActivityPanel jobId={jobId} members={people} />
+        </div>
+      ) : null}
+      {tab === "takeoffs" ? (
+        <div role="tabpanel" id="panel-takeoffs" aria-labelledby="tab-takeoffs" tabIndex={0}>
+          <TakeoffsPanel jobId={jobId} />
         </div>
       ) : null}
     </div>

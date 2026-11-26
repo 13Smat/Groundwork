@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Spec 04 part 2 — Takeoff editor
+
+- The job page has a Takeoffs tab. New takeoff creates an aerial takeoff on the first license-cleared capture and opens `/jobs/$jobId/takeoffs/$takeoffId`. The editor is loaded lazily so MapLibre and Terra Draw stay out of the office bundle. `/catalog/takeoff` is still the takeoff-item screen. ADR 0014.
+- The map draws polygon, line, and point measurements and an unsaved ruler. Live area and length use Turf. Save calls `PUT /takeoffs/:id/measurements`, then the quantity summary shows the server sum and union. The parcel outline is a reference and is not a measurement.
+- The imagery picker lists captures from `GET /imagery/captures?locationId=` (Helene, then NC Ortho, then NAIP) with source, date, GSD, leaf, attribution, and the API warnings. Switching after a measurement asks first and sends `confirm: true`. No allowed capture disables New takeoff. Google, Mapbox, and Orthoimagery Latest are not options and are not tile URLs.
+- Playwright covers drawing and save, the age warning and attribution, the block when the site has no capture, and the NAIP banner. There is no takeoff list route. Ids created in this browser are remembered in `sessionStorage`. The gap is in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Spec 06 part 2 — Catalog grid, recipe builder, and starter pack
 
 - The office catalog screen has a tab per kind, an inline grid, and a detail drawer. Arrow keys move between cells. Roles without `catalog.manage` do not see the unit cost column, and the grid is read only for them.
