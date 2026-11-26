@@ -1,6 +1,6 @@
 # Status
 
-Takeoff and measurements (spec 04, part 1 of 3) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Takeoff and measurements (spec 04, part 1 of 3) is the current slice. CRM and jobs (spec 03, part 2 of 2) is on main (`bfa1593`). Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -13,8 +13,9 @@ Takeoff and measurements (spec 04, part 1 of 3) is the current slice. Owner: And
 - `Job.stage` lives in `packages/shared`. Illegal transitions and a won without `jobs.force_won` return 409 problem+json. That token is on owner and admin only. Every stage change writes `audit_log`.
 - Fixture geocoder and parcel adapters. No network and no API keys. Parcel hits are cached in `parcel_cache`. The first job number in a workspace is `J-1001`.
 - Fastify routes for clients, contacts, locations, resolve, jobs, transitions, notes, tasks, presigned files, search, and the pipeline summary. Creating a client warns on a duplicate email or phone and still creates the row.
-- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, and takeoff tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. An `e2e` job runs Playwright. Scripts that load the API build its workspace dependencies first. There is no CRM UI in this slice.
+- The office app has the pipeline board, jobs list, address-first job create, job detail, clients, and a location context map. Column totals come from `/pipeline/summary`. Lost asks for a reason. A 409 is shown and the card stays put. File rows include a presigned `download_url`. `GET /jobs/:id/activity` reads `audit_log`. The map uses MapLibre and only the seeded `fixture_rgbir` tile. Playwright covers create, the lost reason, the illegal transition, upload, and search.
 - Takeoff measurements are migration `0009_takeoff.sql`. `takeoff` and `measurement` force row security and reference the `takeoff_item` table from `0006`. ADR 0013. `Takeoff.status` is `draft -> in_review -> final`, and `final -> draft` inserts the next version. PostGIS geography is the stored area and length. Turf in `packages/geo` is the live-feedback helper. A source with `allows_tracing = false` or a null `verified_at` is 403. A capture that is not `ready` is 409.
+- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, and takeoff tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
 
 ## Not in this slice
 
@@ -32,7 +33,8 @@ Takeoff and measurements (spec 04, part 1 of 3) is the current slice. Owner: And
 - AI assist and AI auto drawing. The `source` values exist. Nothing writes them yet.
 - Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
 - A browser-facing signed tile URL. Imagery still proxies.
-- CRM screens. This is the API half of spec 03.
+- Marking a task done. The API stores `done` and this screen does not change it.
+- A signed download that outlives the 900 second presign. See `docs/specs/OPEN-QUESTIONS.md`.
 - Sentry. Choosing a license. Choosing between Fly and Render.
 - The remaining gaps in `docs/specs/OPEN-QUESTIONS.md`.
 - Sign-ups or spend. No hosted secrets in git. Local compose passwords, the tile signing secret, and the local Better Auth secret are laptop defaults and are refused when `NODE_ENV=production`.

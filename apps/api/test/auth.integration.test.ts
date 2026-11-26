@@ -70,6 +70,7 @@ const TENANT_ROUTES = [
   "post /jobs/{id}/tasks",
   "get /jobs/{id}/files",
   "post /jobs/{id}/files",
+  "get /jobs/{id}/activity",
   "get /search",
   "get /pipeline/summary",
   "post /jobs/{id}/takeoffs",

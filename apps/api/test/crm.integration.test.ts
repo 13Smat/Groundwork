@@ -413,6 +413,21 @@ describe("crm and jobs", () => {
       actor: ownerMember.id,
       diff: { from: "proposed", to: "won", reason: "handshake", forced: true },
     });
+    const activity = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${jobId}/activity`,
+      headers: headers(owner.cookie, workspace.id),
+    });
+    expect(activity.statusCode, activity.body).toBe(200);
+    const events = activity.json().events as {
+      actor_member_id: string | null;
+      diff: { to: string | null; reason: string | null; forced: boolean };
+    }[];
+    expect(events.map((event) => event.diff.to)).toEqual(["estimating", "proposed", "won"]);
+    expect(events[2]).toMatchObject({
+      actor_member_id: ownerMember.id,
+      diff: { to: "won", reason: "handshake", forced: true },
+    });
     const lostAudit = await requireAdmin().query<{ diff: { reason: string | null; to: string } }>(
       `select diff from audit_log where entity_id = $1 order by id`,
       [lostId],
@@ -667,6 +682,7 @@ describe("crm and jobs", () => {
     expect(file.statusCode, file.body).toBe(201);
     expect(file.json().upload.method).toBe("PUT");
     expect(file.json().upload.url).toContain(file.json().file.storage_key);
+    expect(file.json().file.download_url).toContain(file.json().file.storage_key);
     expect(file.json().file.status).toBe("pending");
     const files = await requireApp().inject({
       method: "GET",

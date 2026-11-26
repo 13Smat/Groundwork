@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0014. 0011 and 0012 are reserved for the parallel catalog UI and CRM UI slices.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0014. 0011 is reserved for the parallel catalog UI slice. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |

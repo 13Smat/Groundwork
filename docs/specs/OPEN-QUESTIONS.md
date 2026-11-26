@@ -179,3 +179,7 @@ Overlaps of the same item are flagged. The spec does not give a minimum area. AD
 Display rounding names ft², yd², and ft. Acres are in the builder rules and have no step in spec 04. ADR 0013 rounds acres to 0.001.
 
 `PATCH /takeoffs/:id` requires confirm before changing the capture on a takeoff that already has measurements. The spec does not name the field. The body uses `confirm: true`. JSON is snake_case (`location_id`, `imagery_capture_id`), matching the routes from ADR 0007. The spec table writes `locationId` and `imageryCaptureId`. The spec files were not edited.
+
+## Activity list and file download URL
+
+Spec 03's job page includes an Activity tab and Files/Photos. The API table does not name a read for `audit_log` or a way for the browser to GET a stored object. This UI reads `GET /jobs/:id/activity` (actor, action, `at`, and the stage diff already written by ADR 0009) and adds `download_url` on the file payload, signed the same way as the upload URL. The presign lifetime is still the open question above. The spec files were not edited.
