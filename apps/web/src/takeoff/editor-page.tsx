@@ -104,6 +104,7 @@ export default function TakeoffEditorPage({
     corrections: number;
     overlaps: number;
   } | null>(null);
+  const [persistedIds, setPersistedIds] = useState<ReadonlySet<string>>(() => new Set());
   const apiRef = useRef<DrawApi | null>(null);
   const featuresRef = useRef<EditorFeature[] | null>(null);
   const itemsRef = useRef<TakeoffItemRow[]>([]);
@@ -133,6 +134,9 @@ export default function TakeoffEditorPage({
     pendingLoad.current = built.load;
     featuresRef.current = built.features;
     setFeatures(built.features);
+    setPersistedIds(
+      new Set(built.features.filter((feature) => feature.server).map((feature) => feature.id)),
+    );
   }, [items.data, items.isSuccess, measurements.data, measurements.isSuccess]);
 
   useEffect(() => {
@@ -151,7 +155,16 @@ export default function TakeoffEditorPage({
   }, [features, mapReady]);
 
   useEffect(() => {
-    apiRef.current?.setMode(tool);
+    const api = apiRef.current;
+    if (!api) {
+      return;
+    }
+    api.setMode(tool);
+    if (tool === "select" && pendingSelect.current) {
+      const id = pendingSelect.current;
+      pendingSelect.current = null;
+      api.selectFeature(id);
+    }
   }, [tool, mapReady]);
 
   useEffect(() => {
@@ -198,6 +211,15 @@ export default function TakeoffEditorPage({
       featuresRef.current = next;
       pendingLoad.current = toLoadFeatures(next, catalog);
       setFeatures(next);
+      setPersistedIds((current) => {
+        const ids = new Set(current);
+        for (const feature of next) {
+          if (feature.server) {
+            ids.add(feature.id);
+          }
+        }
+        return ids;
+      });
       const first = built.features[0];
       if (first) {
         pendingSelect.current = first.id;
@@ -373,11 +395,6 @@ export default function TakeoffEditorPage({
     remember(current, next);
     showFeatures(next);
     setError("");
-    if (other.server) {
-      void api(`/measurements/${other.id}`, { method: "DELETE" }).catch((err: unknown) => {
-        setError(message(err, "Could not remove the merged measurement."));
-      });
-    }
   }
 
   const onParcels = useCallback((rows: readonly { hit: ParcelHit; selected: boolean }[]) => {
@@ -427,12 +444,16 @@ export default function TakeoffEditorPage({
     setSelectedItemId(id);
     apiRef.current?.highlight(id);
     const first = features?.find((feature) => feature.itemId === id);
-    if (first) {
-      setTool("select");
-      apiRef.current?.setMode("select");
-      apiRef.current?.selectFeature(first.id);
-      setSelectedFeatureId(first.id);
+    if (!first) {
+      return;
     }
+    setSelectedFeatureId(first.id);
+    if (tool === "select") {
+      apiRef.current?.selectFeature(first.id);
+      return;
+    }
+    pendingSelect.current = first.id;
+    setTool("select");
   }
 
   function onToggle(id: string, hidden: boolean) {
@@ -458,55 +479,60 @@ export default function TakeoffEditorPage({
     apiRef.current?.setLabel(id, next);
   }
 
-  async function onDelete(id: string) {
-    const feature = features?.find((row) => row.id === id);
+  function onDelete(id: string) {
+    const feature = featuresRef.current?.find((row) => row.id === id);
     if (!feature) {
       return;
     }
     setError("");
-    try {
-      if (feature.server) {
-        await api(`/measurements/${id}`, { method: "DELETE" });
-      }
-      apiRef.current?.remove(id);
-      setSelectedFeatureId((current) => (current === id ? null : current));
-      setSaveStatus("");
-      await client.invalidateQueries({ queryKey: ["takeoff-summary", takeoffId] });
-      await client.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
-    } catch (err) {
-      setError(message(err, "Could not delete that measurement."));
-    }
+    apiRef.current?.remove(id);
+    setSelectedFeatureId((current) => (current === id ? null : current));
+    setSaveStatus("");
   }
 
   async function onSave() {
-    if (!features || features.length === 0 || saving) {
+    const current = featuresRef.current;
+    if (!current || saving) {
+      return;
+    }
+    const removed = [...persistedIds].filter((id) => !current.some((feature) => feature.id === id));
+    if (current.length === 0 && removed.length === 0) {
       return;
     }
     setSaving(true);
     setError("");
     try {
-      const collection = await api<MeasurementCollection>(`/takeoffs/${takeoffId}/measurements`, {
-        method: "PUT",
-        body: JSON.stringify({
-          features: features.map((feature) => ({
-            id: feature.id,
-            takeoff_item_id: feature.itemId,
-            kind: feature.kind,
-            geom: measurementGeometry(feature.geometry),
-            source: feature.source,
-            label: feature.label,
-          })),
-        }),
-      });
-      const applied = applyServer(features, collection);
-      setSavedNotices({
-        corrections: collection.corrections.length,
-        overlaps: collection.overlaps.length,
-      });
-      featuresRef.current = applied.features;
-      setFeatures(applied.features);
-      for (const feature of applied.replaced) {
-        apiRef.current?.replaceGeometry(feature.id, feature.geometry);
+      const kept = new Set(persistedIds);
+      for (const id of removed) {
+        await api(`/measurements/${id}`, { method: "DELETE" });
+        kept.delete(id);
+      }
+      setPersistedIds(new Set(kept));
+      if (current.length > 0) {
+        const collection = await api<MeasurementCollection>(`/takeoffs/${takeoffId}/measurements`, {
+          method: "PUT",
+          body: JSON.stringify({
+            features: current.map((feature) => ({
+              id: feature.id,
+              takeoff_item_id: feature.itemId,
+              kind: feature.kind,
+              geom: measurementGeometry(feature.geometry),
+              source: feature.source,
+              label: feature.label,
+            })),
+          }),
+        });
+        const applied = applyServer(current, collection);
+        setSavedNotices({
+          corrections: collection.corrections.length,
+          overlaps: collection.overlaps.length,
+        });
+        featuresRef.current = applied.features;
+        setFeatures(applied.features);
+        setPersistedIds(new Set(applied.features.map((feature) => feature.id)));
+        for (const feature of applied.replaced) {
+          apiRef.current?.replaceGeometry(feature.id, feature.geometry);
+        }
       }
       await client.invalidateQueries({ queryKey: ["takeoff-summary", takeoffId] });
       await client.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
@@ -582,6 +608,9 @@ export default function TakeoffEditorPage({
   }
 
   const captureId = takeoff.data.imagery_capture_id;
+  const pendingDeletes = [...persistedIds].filter(
+    (id) => !features.some((feature) => feature.id === id),
+  );
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const corrections = savedNotices?.corrections ?? measurements.data?.corrections.length ?? 0;
@@ -732,7 +761,9 @@ export default function TakeoffEditorPage({
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
-              disabled={readOnly || saving || features.length === 0}
+              disabled={
+                readOnly || saving || (features.length === 0 && pendingDeletes.length === 0)
+              }
               onClick={() => {
                 void onSave();
               }}

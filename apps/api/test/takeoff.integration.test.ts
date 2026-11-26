@@ -299,6 +299,38 @@ describe("takeoff measurements", () => {
     expect(stored.rows[0]?.stored).toBe(stored.rows[0]?.area);
   });
 
+  it("keeps a deleted measurement gone after the remaining features are saved", async () => {
+    const job = await createJob();
+    const item = await createItem("Pad", "area", "ft2");
+    const takeoff = await createTakeoff(job.id, job.location_id);
+    const kept = createId();
+    const removed = createId();
+    const saved = await putFeatures(takeoff.id, [
+      { id: kept, takeoff_item_id: item, kind: "area", geom: squareAt(35) },
+      { id: removed, takeoff_item_id: item, kind: "area", geom: squareAt(36) },
+    ]);
+    expect(saved.status, saved.raw).toBe(200);
+    expect(saved.body.features.map((feature) => feature.id).sort()).toEqual([kept, removed].sort());
+    const deleted = await requireApp().inject({
+      method: "DELETE",
+      url: `/measurements/${removed}`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(deleted.statusCode, deleted.body).toBe(204);
+    const again = await putFeatures(takeoff.id, [
+      { id: kept, takeoff_item_id: item, kind: "area", geom: squareAt(35) },
+    ]);
+    expect(again.status, again.raw).toBe(200);
+    expect(again.body.features.map((feature) => feature.id)).toEqual([kept]);
+    const listed = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/measurements`,
+      headers: headers(owner.cookie),
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(listed.json().features.map((feature: { id: string }) => feature.id)).toEqual([kept]);
+  });
+
   it("subtracts a 20 ft hole", async () => {
     const job = await createJob();
     const item = await createItem("Lawn", "area", "ft2");

@@ -321,6 +321,52 @@ test("undo and redo restore a create, a vertex edit, a delete, and a re-tag", as
   expect(logs.filter((line) => line.startsWith("pageerror:"))).toEqual([]);
 });
 
+test("a saved delete stays gone after save and reload", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Delete Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Delete Homes");
+  await openEditor(page, logs);
+  await drawSquare(page);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await page.getByRole("radio", { name: "Select" }).click();
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("button", { name: "Delete measurement" }).click();
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
+  await expectMapReady(page, logs);
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await expect(page.getByText(/Server total \d+ ft²/)).toHaveCount(0);
+});
+
+test("undo of a delete before save keeps the measurement", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Undo Delete Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Undo Delete Homes");
+  await openEditor(page, logs);
+  await drawSquare(page);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+  await page.getByRole("radio", { name: "Select" }).click();
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("button", { name: "Delete measurement" }).click();
+  await expect(page.getByText(/Server total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
+  await expectMapReady(page, logs);
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+});
+
 test("selects more than one parcel in view", async ({ page }) => {
   test.setTimeout(120_000);
   const logs = watchPage(page);
