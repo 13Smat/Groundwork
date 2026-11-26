@@ -19,6 +19,7 @@ RUN set -eu \
   && curl -fsSL "https://github.com/minio/mc/releases/download/${MC_VERSION}/${file}" -o /tmp/mc \
   && expected="$(awk -v arch="$bin_arch" '$1 == arch { print $2 }' /tmp/checksums.txt)" \
   && test -n "$expected" \
+  && echo "mc ${bin_arch} sha256 $(sha256sum /tmp/mc)" \
   && echo "${expected}  /tmp/mc" | sha256sum -c - \
   && install -m 0755 /tmp/mc /usr/local/bin/mc \
   && rm /tmp/mc /tmp/checksums.txt

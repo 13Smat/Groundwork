@@ -107,7 +107,13 @@ jobs:
         run: pnpm test:tiles
 
       - name: Start Postgres, MinIO, and TiTiler
-        run: docker compose up -d --build --wait postgres minio minio-init titiler
+        run: |
+          set -eu
+          if ! docker compose up -d --build --wait postgres minio minio-init titiler; then
+            docker compose ps -a || true
+            docker compose logs --no-color --timestamps || true
+            exit 1
+          fi
 
       - name: Migrate
         run: pnpm db:migrate

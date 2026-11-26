@@ -9,6 +9,7 @@
 - Added the TiTiler app in `services/tiles` and wired it into `docker-compose.yml` in place of the unguarded placeholder. XYZ tiles come from the bucket. `allows_tracing = false` or a null `verified_at` returns 403 from the API and from TiTiler.
 - Added `GET /imagery/captures` and `GET /imagery/tiles/:captureId/{z}/{x}/{y}`. The tile route proxies a 60-second signed URL and writes an `imagery_tile` usage event. Both routes use `stubImageryAuth` until Auth and Workspaces replaces it.
 - CI runs the Python guard tests in `check` and an imagery job that renders the fixture tile. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+- Corrected the amd64 `mc` checksum used by the bucket-init image. It was one hex digit off the published `RELEASE.2025-08-13T08-35-41Z` binary, so the imagery job could not build `minio-init`.
 
 ### Ticket 2 — Local infra, database, and office shell
 
