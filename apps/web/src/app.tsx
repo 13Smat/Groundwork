@@ -1,14 +1,30 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   createRootRoute,
   createRoute,
   createRouter,
   Link,
   Outlet,
+  redirect,
   RouterProvider,
+  useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { AppShell, PrimaryNav, type NavLinkProps } from "@groundwork/ui";
+import { AppShell, Button, PrimaryNav, type NavLinkProps } from "@groundwork/ui";
+
+import {
+  AcceptInvitePage,
+  CreateWorkspacePage,
+  DashboardPage,
+  MembersPage,
+  RolesPage,
+  SettingsPage,
+  SignInPage,
+  SignUpPage,
+  WorkspaceSwitcher,
+  signOut,
+} from "./pages";
+import { loadMe, queryClient, rememberNext } from "./session";
 
 const NAV = [
   { to: "/", label: "Office" },
@@ -19,6 +35,9 @@ const NAV = [
   { to: "/proposals", label: "Proposals" },
   { to: "/schedule", label: "Schedule" },
   { to: "/invoices", label: "Invoices" },
+  { to: "/settings", label: "Settings" },
+  { to: "/members", label: "Members" },
+  { to: "/roles", label: "Roles" },
 ] as const;
 
 type OfficePath = (typeof NAV)[number]["to"];
@@ -32,9 +51,18 @@ const TITLES: Record<OfficePath, string> = {
   "/proposals": "Proposals",
   "/schedule": "Schedule",
   "/invoices": "Invoices",
+  "/settings": "Settings",
+  "/members": "Members",
+  "/roles": "Roles",
 };
 
 function titleFor(pathname: string): string {
+  if (pathname === "/workspaces/new") {
+    return "Create workspace";
+  }
+  if (pathname.startsWith("/invites/")) {
+    return "Accept invite";
+  }
   if (pathname in TITLES) {
     return TITLES[pathname as OfficePath];
   }
@@ -64,15 +92,81 @@ function OfficeNav({ pathname }: { pathname: string }) {
   );
 }
 
-function Section({ children }: { children: string }) {
-  return <p className="max-w-prose text-lg leading-relaxed">{children}</p>;
+function placeholder(sentence: string) {
+  return function PlaceholderPage() {
+    return <p className="max-w-prose text-lg leading-relaxed">{sentence}</p>;
+  };
 }
 
 const rootRoute = createRootRoute({
   component: function RootLayout() {
+    return <Outlet />;
+  },
+});
+
+const signInRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sign-in",
+  beforeLoad: async () => {
+    try {
+      await queryClient.ensureQueryData({ queryKey: ["me"], queryFn: loadMe });
+    } catch {
+      return;
+    }
+    throw redirect({ to: "/" });
+  },
+  component: SignInPage,
+});
+
+const signUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sign-up",
+  beforeLoad: async () => {
+    try {
+      await queryClient.ensureQueryData({ queryKey: ["me"], queryFn: loadMe });
+    } catch {
+      return;
+    }
+    throw redirect({ to: "/" });
+  },
+  component: SignUpPage,
+});
+
+const authedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "authed",
+  beforeLoad: async ({ location }) => {
+    let profile;
+    try {
+      profile = await queryClient.ensureQueryData({ queryKey: ["me"], queryFn: loadMe });
+    } catch {
+      rememberNext(location.pathname);
+      throw redirect({ to: "/sign-in" });
+    }
+    const active = profile.memberships.some((member) => member.status === "active");
+    const open =
+      location.pathname === "/workspaces/new" || location.pathname.startsWith("/invites/");
+    if (!active && !open) {
+      throw redirect({ to: "/workspaces/new" });
+    }
+  },
+  component: function AuthedLayout() {
     const pathname = useRouterState({ select: (state) => state.location.pathname });
+    const navigate = useNavigate();
+    const profile = useQuery({ queryKey: ["me"], queryFn: loadMe });
     return (
-      <AppShell title={titleFor(pathname)} nav={<OfficeNav pathname={pathname} />}>
+      <AppShell
+        title={titleFor(pathname)}
+        nav={<OfficeNav pathname={pathname} />}
+        actions={
+          <>
+            {profile.data ? <WorkspaceSwitcher me={profile.data} /> : null}
+            <Button variant="secondary" onClick={() => void signOut(navigate)}>
+              Sign out
+            </Button>
+          </>
+        }
+      >
         <Outlet />
       </AppShell>
     );
@@ -80,74 +174,104 @@ const rootRoute = createRootRoute({
 });
 
 const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/",
-  component: function HomePage() {
-    return (
-      <Section>
-        Measure a site, price the work, and send a proposal. This is the office app shell.
-      </Section>
-    );
-  },
+  component: DashboardPage,
 });
 
-function placeholder(sentence: string) {
-  return function PlaceholderPage() {
-    return <Section>{sentence}</Section>;
-  };
-}
-
 const jobsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/jobs",
   component: placeholder("No job records are loaded in this slice."),
 });
 
 const takeoffRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/takeoff",
   component: placeholder("No takeoff records are loaded in this slice."),
 });
 
 const catalogRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/catalog",
   component: placeholder("No catalog records are loaded in this slice."),
 });
 
 const estimatesRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/estimates",
   component: placeholder("No estimate records are loaded in this slice."),
 });
 
 const proposalsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/proposals",
   component: placeholder("No proposal records are loaded in this slice."),
 });
 
 const scheduleRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/schedule",
   component: placeholder("No schedule records are loaded in this slice."),
 });
 
 const invoicesRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authedRoute,
   path: "/invoices",
   component: placeholder("No invoice records are loaded in this slice."),
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
+const membersRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/members",
+  component: MembersPage,
+});
+
+const rolesRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/roles",
+  component: RolesPage,
+});
+
+const createWorkspaceRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/workspaces/new",
+  component: CreateWorkspacePage,
+});
+
+const acceptRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/invites/$token",
+  component: function AcceptRoute() {
+    const { token } = acceptRoute.useParams();
+    return <AcceptInvitePage token={token} />;
+  },
+});
+
 const routeTree = rootRoute.addChildren([
-  indexRoute,
-  jobsRoute,
-  takeoffRoute,
-  catalogRoute,
-  estimatesRoute,
-  proposalsRoute,
-  scheduleRoute,
-  invoicesRoute,
+  signInRoute,
+  signUpRoute,
+  authedRoute.addChildren([
+    indexRoute,
+    jobsRoute,
+    takeoffRoute,
+    catalogRoute,
+    estimatesRoute,
+    proposalsRoute,
+    scheduleRoute,
+    invoicesRoute,
+    settingsRoute,
+    membersRoute,
+    rolesRoute,
+    createWorkspaceRoute,
+    acceptRoute,
+  ]),
 ]);
 
 const router = createRouter({ routeTree });
@@ -157,8 +281,6 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
-
-const queryClient = new QueryClient();
 
 export function App() {
   return (

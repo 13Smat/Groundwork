@@ -82,6 +82,55 @@ jobs:
       - name: Row level security
         run: pnpm test:rls
 
+      - name: Auth and workspaces
+        run: pnpm test:auth
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: groundwork
+          POSTGRES_PASSWORD: groundwork
+          POSTGRES_DB: groundwork
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U groundwork -d groundwork"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+      CI: "true"
+      DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
+      APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
+      APP_DB_PASSWORD: groundwork
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ubuntu-latest is 26.04. Playwright 1.57 has no dependency list for it.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Playwright
+        run: pnpm test:e2e
+
   imagery:
     name: imagery
     runs-on: ubuntu-latest

@@ -1,5 +1,5 @@
 import fastifySwagger from "@fastify/swagger";
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import {
   jsonSchemaTransform,
   serializerCompiler,
@@ -7,19 +7,30 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import type { Logger } from "pino";
+import type pg from "pg";
 import { z } from "zod/v4";
 
+import { createAuth } from "./auth/auth.js";
+import { createSessionImageryAuth } from "./auth/hook.js";
+import { registerAuthHandler } from "./auth/http.js";
+import { createMailer, type Mailer } from "./auth/mail.js";
+import { createDb } from "./db/client.js";
 import { registerProblemHandlers } from "./errors.js";
 import { registerImageryRoutes, type ImageryRouteOptions } from "./imagery/routes.js";
 import { createLogger } from "./logging.js";
+import { registerGroundworkRoutes } from "./routes/groundwork.js";
 
 export async function buildApp(options?: {
   logger?: boolean | Logger;
-  imagery?: ImageryRouteOptions;
+  database?: { app: pg.Pool; auth: pg.Pool };
+  mailer?: Mailer;
+  imagery?: Omit<ImageryRouteOptions, "db" | "auth"> & { db?: ImageryRouteOptions["db"] };
 }) {
   const logger =
-    options?.logger === true ? createLogger("api") : options?.logger ? options.logger : false;
-  const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
+    options?.logger === true ? createLogger("api") : options?.logger ? options.logger : undefined;
+  const app = Fastify(
+    logger ? { loggerInstance: logger as FastifyBaseLogger } : { logger: false },
+  ).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -51,8 +62,26 @@ export async function buildApp(options?: {
 
   app.get("/openapi.json", async () => app.swagger());
 
-  if (options?.imagery) {
-    await registerImageryRoutes(app, options.imagery);
+  if (options?.database) {
+    const db = options.imagery?.db ?? createDb(options.database.app);
+    const mailer = options.mailer ?? createMailer(app.log);
+    const auth = createAuth(options.database.auth, mailer);
+    registerAuthHandler(app, auth);
+    await registerGroundworkRoutes(app, {
+      db,
+      authPool: options.database.auth,
+      auth,
+      mailer,
+    });
+    await registerImageryRoutes(app, {
+      ...options.imagery,
+      db,
+      auth: createSessionImageryAuth({
+        db,
+        auth,
+        authPool: options.database.auth,
+      }),
+    });
   }
 
   return app;

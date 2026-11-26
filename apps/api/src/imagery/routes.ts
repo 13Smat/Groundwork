@@ -6,7 +6,6 @@ import { sql } from "kysely";
 import { z } from "zod/v4";
 
 import type { ImageryAuthHook } from "../auth/hook.js";
-import { stubImageryAuth } from "../auth/hook.js";
 import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
@@ -59,7 +58,7 @@ export const locationLookupUnavailable: LocationLookup = () => {
 
 export type ImageryRouteOptions = {
   db: Kysely<Database>;
-  auth?: ImageryAuthHook;
+  auth: ImageryAuthHook;
   locationLookup?: LocationLookup;
   now?: () => Date;
   /** Capture age is measured against this instant. Defaults to `now`. Tests freeze it. */
@@ -102,7 +101,7 @@ export async function registerImageryRoutes(
   options: ImageryRouteOptions,
 ): Promise<void> {
   const routes = app.withTypeProvider<ZodTypeProvider>();
-  const auth = options.auth ?? stubImageryAuth;
+  const auth = options.auth;
   const locationLookup = options.locationLookup ?? locationLookupUnavailable;
   const now = options.now ?? (() => new Date());
   const asOf = options.asOf ?? now;
@@ -114,6 +113,7 @@ export async function registerImageryRoutes(
     "/imagery/captures",
     {
       schema: {
+        tags: ["tenant-header"],
         querystring: z.object({
           bbox: z.string().optional(),
           locationId: z.string().optional(),
@@ -137,6 +137,7 @@ export async function registerImageryRoutes(
     "/imagery/tiles/:captureId/:z/:x/:y",
     {
       schema: {
+        tags: ["tenant-header"],
         params: z.object({
           captureId: z.uuidv7(),
           z: z.coerce.number().int().min(0).max(24),

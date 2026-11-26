@@ -45,6 +45,7 @@ Checked while building this slice:
 - TiTiler must receive `APP_DATABASE_URL` for `groundwork_app`. The role is created by migrate, which may run after the container starts. Health does not need the database. The first tile request does.
 - `locationId`, the 1095-day threshold, the 60-second signature, `cost_estimate_cents` of 0, and proxy-versus-browser-URL are recorded in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 - CI's imagery job builds this image and renders one tile. `pnpm check` does not need Docker. It does run the Python guard tests.
+- [ADR 0007](0007-auth-workspaces.md) replaced `stubImageryAuth`. `x-workspace-id` still names the workspace. The route now requires a session, and a caller who is not an active member receives 404.
 
 ## References
 

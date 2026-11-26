@@ -2,12 +2,23 @@
 
 ## Unreleased
 
+### Ticket 02 — Auth and workspaces
+
+- Added `0002_auth_workspaces.sql` for `app_user`, `workspace`, the six system roles, sessions, and invites. Better Auth's organization is the workspace. ADR 0007. Primary keys the library compares are text UUIDv7s. `groundwork_auth` is the sign-up connection and cannot be assumed by `groundwork_app`.
+- Wired email and password, magic links, and invites. Google is off unless both client env vars are set. Unset SMTP logs the message outside production. Mailpit remains the local catcher.
+- Member transitions, the 7-day invite, and last-owner protection live in `packages/shared`. Illegal changes return 409. Disabling a member deletes that user's sessions immediately.
+- Tenant routes return 404 for a session that is not an active member. `GET /catalog-items` is a fixture that hides `unit_cost_cents` without `catalog.manage`.
+- Replaced `stubImageryAuth`. `/imagery/*` requires the same session and membership check. `x-workspace-id` still names the workspace.
+- The office app can sign up, create a workspace, switch workspaces, edit settings, invite members, and read the role list. Playwright covers the keyboard sign-up path. CI runs the auth tests in the `db` job and Playwright in `e2e`. Playwright is 1.65 so Chromium's system dependencies install on the Ubuntu 26.04 runner.
+- `groundwork_auth` is `NOSUPERUSER NOBYPASSRLS`. `groundwork_app` cannot assume that role and has no privilege on `session`, `account`, or `verification`. The sign-in pool is the one handed to Better Auth.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Imagery registry and TiTiler
 
 - Added `0003_imagery.sql` for `imagery_source` and `imagery_capture`. Global rows are readable under the null-workspace policy. The app role cannot write them. ADR 0006.
 - Seeded the NC Helene 2025, NC ortho, and NAIP rows, plus blocked Google, Mapbox, and Orthoimagery_Latest rows. Committed a synthetic 4-band fixture COG. Tests load it into MinIO. No state service is called.
 - Added the TiTiler app in `services/tiles` and wired it into `docker-compose.yml` in place of the unguarded placeholder. XYZ tiles come from the bucket. `allows_tracing = false` or a null `verified_at` returns 403 from the API and from TiTiler.
-- Added `GET /imagery/captures` and `GET /imagery/tiles/:captureId/{z}/{x}/{y}`. The tile route proxies a 60-second signed URL and writes an `imagery_tile` usage event. Both routes use `stubImageryAuth` until Auth and Workspaces replaces it.
+- Added `GET /imagery/captures` and `GET /imagery/tiles/:captureId/{z}/{x}/{y}`. The tile route proxies a 60-second signed URL and writes an `imagery_tile` usage event. The first cut used `stubImageryAuth`. Ticket 02 replaced that with the session check.
 - CI runs the Python guard tests in `check` and an imagery job that renders the fixture tile. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 - Corrected the amd64 `mc` checksum used by the bucket-init image. It was one hex digit off the published `RELEASE.2025-08-13T08-35-41Z` binary, so the imagery job could not build `minio-init`.
 

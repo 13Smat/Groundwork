@@ -8,6 +8,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "apps/api/test/rls.test.ts",
+      "apps/api/test/auth.integration.test.ts",
       "apps/api/test/imagery.integration.test.ts",
     ],
   },

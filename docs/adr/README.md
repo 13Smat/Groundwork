@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0007.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0008.
 
 | ADR | Title |
 | --- | --- |
@@ -11,3 +11,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0004](0004-node-24.md) | Node 24 LTS |
 | [0005](0005-local-infra-and-rls.md) | Local infra, the app role, and infra table shapes |
 | [0006](0006-imagery-registry-and-tiles.md) | Imagery registry and the TiTiler gate |
+| [0007](0007-auth-workspaces.md) | Auth tables, sessions, and workspace membership |

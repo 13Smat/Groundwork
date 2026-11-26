@@ -11,6 +11,7 @@ import { WORKSPACE_HEADER } from "../src/auth/hook.js";
 import {
   LOCAL_TILE_SIGNING_SECRET,
   readAppDatabaseUrl,
+  readAuthDatabaseUrl,
   readDatabaseUrl,
   readObjectStorageConfig,
   readTitilerUrl,
@@ -49,15 +50,27 @@ type CaptureBody = {
 
 let admin: pg.Pool;
 let appPool: pg.Pool;
+let authPool: pg.Pool;
 let db: Kysely<Database>;
 let app: Awaited<ReturnType<typeof buildApp>>;
 let workspaceId: string;
+let cookie: string;
 const upstreamCalls: string[] = [];
+
+const BROWSER = {
+  origin: "http://127.0.0.1:5173",
+  host: "127.0.0.1:5173",
+};
+
+function tenantHeaders(): Record<string, string> {
+  return { ...BROWSER, cookie, [WORKSPACE_HEADER]: workspaceId };
+}
 
 beforeAll(async () => {
   await migrate("up");
   admin = createPool(readDatabaseUrl());
   appPool = createPool(readAppDatabaseUrl());
+  authPool = createPool(readAuthDatabaseUrl());
   db = createDb(appPool);
   workspaceId = createId();
   const storage = readObjectStorageConfig();
@@ -74,6 +87,7 @@ beforeAll(async () => {
     storage,
   );
   app = await buildApp({
+    database: { app: appPool, auth: authPool },
     imagery: {
       db,
       asOf: () => AS_OF,
@@ -85,10 +99,34 @@ beforeAll(async () => {
       },
     },
   });
+  const email = `${createId()}@example.com`;
+  const signup = await app.inject({
+    method: "POST",
+    url: "/auth/sign-up/email",
+    headers: { ...BROWSER, "content-type": "application/json" },
+    payload: { name: "Imagery Owner", email, password: "correct-horse-battery" },
+  });
+  if (signup.statusCode !== 200) {
+    throw new Error(signup.body);
+  }
+  const raw = signup.headers["set-cookie"];
+  const parts = Array.isArray(raw) ? raw : raw ? [String(raw)] : [];
+  cookie = parts.map((part) => String(part).split(";")[0]).join("; ");
+  const created = await app.inject({
+    method: "POST",
+    url: "/workspaces",
+    headers: { ...BROWSER, cookie, "content-type": "application/json" },
+    payload: { name: "Imagery Co" },
+  });
+  if (created.statusCode !== 201) {
+    throw new Error(created.body);
+  }
+  workspaceId = created.json().id;
 });
 
 afterAll(async () => {
   await app?.close();
+  await authPool?.end();
   await appPool?.end();
   await admin?.end();
 });
@@ -98,7 +136,7 @@ describe("imagery captures and tiles", () => {
     const response = await app.inject({
       method: "GET",
       url: `/imagery/captures?bbox=${BURKE}`,
-      headers: { [WORKSPACE_HEADER]: workspaceId },
+      headers: tenantHeaders(),
     });
     expect(response.statusCode).toBe(200);
     const body = response.json() as CaptureBody;
@@ -138,7 +176,7 @@ describe("imagery captures and tiles", () => {
     const response = await app.inject({
       method: "GET",
       url: `/imagery/captures?bbox=${ATLANTA}`,
-      headers: { [WORKSPACE_HEADER]: workspaceId },
+      headers: tenantHeaders(),
     });
     expect(response.statusCode).toBe(200);
     const body = response.json() as CaptureBody;
@@ -147,15 +185,40 @@ describe("imagery captures and tiles", () => {
     expect(body.captures[0]?.gsdCm).toBe(60);
   });
 
-  it("requires a workspace and exactly one of bbox or locationId", async () => {
+  it("requires a session, a workspace membership, and exactly one of bbox or locationId", async () => {
     const missing = await app.inject({ method: "GET", url: `/imagery/captures?bbox=${BURKE}` });
     expect(missing.statusCode).toBe(401);
+
+    const noWorkspace = await app.inject({
+      method: "GET",
+      url: `/imagery/captures?bbox=${BURKE}`,
+      headers: { ...BROWSER, cookie },
+    });
+    expect(noWorkspace.statusCode).toBe(400);
+
+    const strangerEmail = `${createId()}@example.com`;
+    const strangerSignup = await app.inject({
+      method: "POST",
+      url: "/auth/sign-up/email",
+      headers: { ...BROWSER, "content-type": "application/json" },
+      payload: { name: "Stranger", email: strangerEmail, password: "correct-horse-battery" },
+    });
+    expect(strangerSignup.statusCode).toBe(200);
+    const raw = strangerSignup.headers["set-cookie"];
+    const parts = Array.isArray(raw) ? raw : raw ? [String(raw)] : [];
+    const strangerCookie = parts.map((part) => String(part).split(";")[0]).join("; ");
+    const foreign = await app.inject({
+      method: "GET",
+      url: `/imagery/captures?bbox=${BURKE}`,
+      headers: { ...BROWSER, cookie: strangerCookie, [WORKSPACE_HEADER]: workspaceId },
+    });
+    expect(foreign.statusCode).toBe(404);
 
     const locationId = createId();
     const unimplemented = await app.inject({
       method: "GET",
       url: `/imagery/captures?locationId=${locationId}`,
-      headers: { [WORKSPACE_HEADER]: workspaceId },
+      headers: tenantHeaders(),
     });
     expect(unimplemented.statusCode).toBe(501);
     expect(unimplemented.headers["content-type"]).toContain("application/problem+json");
@@ -163,7 +226,7 @@ describe("imagery captures and tiles", () => {
     const both = await app.inject({
       method: "GET",
       url: `/imagery/captures?bbox=${BURKE}&locationId=${locationId}`,
-      headers: { [WORKSPACE_HEADER]: workspaceId },
+      headers: tenantHeaders(),
     });
     expect(both.statusCode).toBe(400);
   });
@@ -184,7 +247,7 @@ describe("imagery captures and tiles", () => {
       const response = await app.inject({
         method: "GET",
         url: `/imagery/tiles/${captureId}/16/17894/25791`,
-        headers: { [WORKSPACE_HEADER]: workspaceId },
+        headers: tenantHeaders(),
       });
       expect(response.statusCode).toBe(403);
       expect(response.headers["content-type"]).toContain("application/problem+json");
@@ -203,7 +266,7 @@ describe("imagery captures and tiles", () => {
     const response = await app.inject({
       method: "GET",
       url: `/imagery/tiles/${captureId}/${fixture.tile.z}/${fixture.tile.x}/${fixture.tile.y}`,
-      headers: { [WORKSPACE_HEADER]: workspaceId },
+      headers: tenantHeaders(),
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("image/png");

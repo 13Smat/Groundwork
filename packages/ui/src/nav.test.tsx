@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { AppShell } from "./shell";
 import { PrimaryNav } from "./nav";
+import { SelectField } from "./select-field";
 import { TextField } from "./text-field";
 
 afterEach(() => {
@@ -60,6 +61,17 @@ describe("AppShell", () => {
     expect(screen.getByRole("dialog", { name: "Keyboard help" })).toBeTruthy();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("SelectField", () => {
+  it("connects the label to the select", () => {
+    render(
+      <SelectField id="role" label="Role">
+        <option value="crew">Crew</option>
+      </SelectField>,
+    );
+    expect(screen.getByLabelText("Role").id).toBe("role");
   });
 });
 

@@ -37,13 +37,28 @@ Insert, update, and delete use a different policy: `workspace_id` must be non-nu
 
 ADR 0002 chooses Better Auth with the organizations plugin. `docs/specs/01-data-model.md` sketches `app_user`, `member`, and `role`, with `citext` on emails. The SQL sketch enables `postgis` and `pgcrypto` and does not enable `citext`. Which tables Better Auth owns, and which tables Groundwork owns, are unspecified.
 
-The foundations migration creates the `citext` extension ([ADR 0005](../adr/0005-local-infra-and-rls.md)). No table in that migration uses the type. The mapping is still open.
+The foundations migration creates the `citext` extension ([ADR 0005](../adr/0005-local-infra-and-rls.md)). No table in that migration uses the type.
+
+[ADR 0007](../adr/0007-auth-workspaces.md) uses one set of tables. Better Auth's `user` is `app_user`, its organization is `workspace`, and `member` and `invitation` keep those names. Groundwork owns `role`. Email columns are `citext`. Primary keys Better Auth compares are `text` storing a UUIDv7, because the adapter binds text. The spec files were not edited.
+
+These choices are still gaps in the specs:
+
+- The permission matrix uses words ("read", "read assigned", "read own", "crew only") and not a token list. ADR 0007 stores `takeoff.read`, `estimate.read`, `proposal.read`, `crm.read.assigned`, `jobs.read.assigned`, `schedule.read`, `schedule.read.own`, and `time.approve.crew`. A later ticket must use those strings.
+- Spec 02 says revoke goes to "(deleted)". The row stays, with status `revoked`. Invitation status `canceled` follows Better Auth's spelling.
+- `GET /catalog-items` returns one fixture row so the cost-visibility check can run. Persisted catalog items are spec 06. The fixture is not a catalog API.
+- Workspace logo is a URL string. File upload is not specified.
+- `workspace.plan` exists and the API does not set it. Billing is still the open question above.
+- The route table has no way to record the active workspace. `POST /workspaces/:id/activate` does that.
+- Better Auth's organization plugin defaults `membershipLimit` to 100. Our routes do not enforce that number.
+- Disabling a member deletes every session for that user, including a session used for a different workspace. The other memberships stay. The person signs in again.
+- System roles have a null `workspace_id` so they can be read with no tenant setting. That is separate from the imagery null-workspace policy.
+- `0003_imagery.sql` has no foreign key to `workspace`. That table did not exist when imagery shipped. Tenant imagery rows stay isolated by the imagery policy.
 
 ## Tables missing from 01
 
 `docs/specs/00-architecture.md` says human numbers (`J-1001` and the rest) come from a `counters` table. The entity list and the SQL sketch in `docs/specs/01-data-model.md` have no `counters` table.
 
-The foundations migration adds `counters` with `workspace_id`, a `prefix` constrained to `J`, `E`, `P`, and `INV`, and `last_value bigint not null` ([ADR 0005](../adr/0005-local-infra-and-rls.md)). There is no default and no seed. The sequence start (the `1001` examples) is still unspecified. There is no foreign key to `workspace`, because that table is not created in this slice.
+The foundations migration adds `counters` with `workspace_id`, a `prefix` constrained to `J`, `E`, `P`, and `INV`, and `last_value bigint not null` ([ADR 0005](../adr/0005-local-infra-and-rls.md)). There is no default and no seed. The sequence start (the `1001` examples) is still unspecified. `workspace` now exists ([ADR 0007](../adr/0007-auth-workspaces.md)). `counters`, `file`, `audit_log`, and `usage_event` still have no foreign key to it.
 
 The entity list names `File`. The SQL sketch has no `file` table.
 

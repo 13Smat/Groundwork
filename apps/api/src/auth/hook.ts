@@ -1,11 +1,16 @@
 import { isUuidV7 } from "@groundwork/shared";
 import type { FastifyRequest } from "fastify";
+import type { Kysely } from "kysely";
+import type pg from "pg";
 
+import type { Database } from "../db/types.js";
 import { ProblemError } from "../errors.js";
+import type { Auth } from "./auth.js";
+import { requireActiveMember, requireSession } from "./guard.js";
 
 export const WORKSPACE_HEADER = "x-workspace-id";
 
-/** What a tile or captures request knows about the caller. Auth will replace the stub. */
+/** What a tile or captures request knows about the caller. */
 export type ImageryAuth = {
   workspaceId: string;
 };
@@ -13,19 +18,32 @@ export type ImageryAuth = {
 export type ImageryAuthHook = (request: FastifyRequest) => Promise<ImageryAuth>;
 
 /**
- * Temporary stand-in for the session middleware. Auth and Workspaces owns the
- * real hook. This reads `x-workspace-id` and checks that it is a UUIDv7.
- * It does not create a session and it does not trust a body field.
+ * Session plus membership. A missing session is 401. A bad workspace header is
+ * 400. A session that is not an active member of that workspace is 404.
+ * Disabling the member deletes their sessions inside requireActiveMember.
  */
-export function stubImageryAuth(request: FastifyRequest): Promise<ImageryAuth> {
+export function workspaceIdFromHeader(request: FastifyRequest): string {
   const raw = request.headers[WORKSPACE_HEADER];
   const workspaceId = Array.isArray(raw) ? raw[0] : raw;
-  if (workspaceId === undefined || !isUuidV7(workspaceId)) {
+  if (typeof workspaceId !== "string" || !isUuidV7(workspaceId)) {
     throw new ProblemError({
-      status: 401,
-      title: "Unauthorized",
-      detail: "A workspace id is required. Auth will replace this stub.",
+      status: 400,
+      title: "Bad Request",
+      detail: "x-workspace-id must be a UUIDv7.",
     });
   }
-  return Promise.resolve({ workspaceId });
+  return workspaceId;
+}
+
+export function createSessionImageryAuth(ctx: {
+  db: Kysely<Database>;
+  auth: Auth;
+  authPool: pg.Pool;
+}): ImageryAuthHook {
+  return async (request) => {
+    const session = await requireSession(ctx.auth, request.headers);
+    const workspaceId = workspaceIdFromHeader(request);
+    await requireActiveMember(ctx, session.id, workspaceId);
+    return { workspaceId };
+  };
 }

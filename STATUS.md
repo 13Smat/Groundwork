@@ -1,25 +1,28 @@
 # Status
 
-Imagery registry and TiTiler (spec 04, part 1) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Auth and workspaces (spec 02) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
 - Ticket 0 through Ticket 2 are on main (`dabcba3`): agent rules, the monorepo, CI, Postgres/PostGIS, MinIO, the `groundwork_app` role, `withWorkspaceContext`, and the office shell. ADR 0001 through ADR 0005.
-- Migration `0003_imagery.sql` adds `imagery_source` and `imagery_capture` with GiST coverage indexes. Global rows (`workspace_id` null) are readable by every workspace. `groundwork_app` cannot write those rows. ADR 0006. Migration `0002` is left for Auth and Workspaces.
-- Seeded `nc_helene_2025`, `nc_ortho` (2024 and 2022), and `naip`, plus blocked `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` (`allows_tracing` false, `verified_at` null). A synthetic 4-band fixture COG is in `db/seed/fixtures/` and is uploaded to MinIO by the tests. No live NC OneMap pull.
-- `services/tiles` is a TiTiler FastAPI app. It serves XYZ tiles from the bucket and returns 403 unless the source allows tracing and `verified_at` is set. Compose builds it in place of the unguarded placeholder.
-- `GET /imagery/captures` (bbox, or locationId which returns 501) and `GET /imagery/tiles/:captureId/{z}/{x}/{y}` (signed proxy, usage event, 403 guard). Both sit behind `stubImageryAuth` (`x-workspace-id`). Auth will replace that function. There is no session middleware yet.
-- CI `check` still runs lint, typecheck, unit tests, the Python guard tests, and build. The `db` job migrates and runs RLS tests, including the imagery policy. The `imagery` job builds TiTiler and renders the fixture tile.
+- Imagery registry and TiTiler are on main (`2fe041f`). Migration `0003_imagery.sql`, the fixture COG, and the guarded tile service. ADR 0006. `/imagery/*` now uses the session and membership check from this slice. `x-workspace-id` still names the workspace.
+- Migration `0002_auth_workspaces.sql` adds `app_user`, `workspace`, `role`, `session`, `account`, `verification`, `member`, and `invitation`. The six system roles and their permission tokens are seeded. ADR 0007. Better Auth's organization is the workspace. A separate `groundwork_auth` role serves sign-up and sessions. `groundwork_app` cannot assume it.
+- Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
+- Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
+- Tenant routes, including imagery, return 404 when the session is not an active member. `GET /catalog-items` is a fixture: roles with `catalog.manage` see `unit_cost_cents`, and other roles do not.
+- The office app has sign-up, sign-in, create workspace, a switcher, settings, members, and the role list. Playwright covers the keyboard sign-up path.
+- CI `check` runs lint, typecheck, unit tests, the Python guard tests, and build. The `db` job migrates and runs RLS and auth tests. The `imagery` job renders the fixture tile with a real session. An `e2e` job runs Playwright.
 
 ## Not in this slice
 
-- Auth, the Better Auth table mapping, and the `workspace` table. The imagery routes trust the stub header until that lands.
 - `locationId` resolution. The location table is spec 03.
 - County ingest, the ingest API, takeoff drawing, and proposal PDF attribution.
-- A browser-facing signed tile URL. This slice proxies.
+- A persisted catalog. `GET /catalog-items` is the cost-visibility fixture.
+- Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
+- A browser-facing signed tile URL. Imagery still proxies.
 - Sentry. Choosing a license. Choosing between Fly and Render.
 - The remaining gaps in `docs/specs/OPEN-QUESTIONS.md`.
-- Sign-ups or spend. No hosted secrets in git. Local compose passwords and the tile signing secret are laptop defaults and are refused when `NODE_ENV=production`.
+- Sign-ups or spend. No hosted secrets in git. Local compose passwords, the tile signing secret, and the local Better Auth secret are laptop defaults and are refused when `NODE_ENV=production`.
 
 ## Open questions
 

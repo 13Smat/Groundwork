@@ -3,7 +3,7 @@ import type { Kysely } from "kysely";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { readAppDatabaseUrl, readDatabaseUrl } from "../src/config.js";
+import { readAppDatabaseUrl, readAuthDatabaseUrl, readDatabaseUrl } from "../src/config.js";
 import { createDb, createPool } from "../src/db/client.js";
 import { listUpMigrations, migrate } from "../src/db/migrate.js";
 import type { Database } from "../src/db/types.js";
@@ -11,6 +11,16 @@ import { TenantRoleError, withWorkspaceContext } from "../src/db/workspace.js";
 import { startQueue } from "../src/queue.js";
 
 const TENANT_TABLES = ["counters", "file", "audit_log", "usage_event"] as const;
+const AUTH_TABLES = [
+  "app_user",
+  "session",
+  "account",
+  "verification",
+  "workspace",
+  "member",
+  "invitation",
+  "role",
+] as const;
 type TenantTable = (typeof TENANT_TABLES)[number];
 
 let admin: pg.Pool | undefined;
@@ -68,6 +78,107 @@ describe("row level security", () => {
       [["postgis", "pgcrypto", "citext"]],
     );
     expect(result.rows.map((row) => row.extname).sort()).toEqual(["citext", "pgcrypto", "postgis"]);
+  });
+
+  it("connects Better Auth as groundwork_auth without superuser or row-security bypass", async () => {
+    const catalog = await requireAdmin().query<{
+      rolsuper: boolean;
+      rolbypassrls: boolean;
+      rolcanlogin: boolean;
+      app_can_assume: boolean;
+    }>(`
+      select rolsuper, rolbypassrls, rolcanlogin,
+        pg_has_role('groundwork_app', 'groundwork_auth', 'member') as app_can_assume
+      from pg_roles
+      where rolname = 'groundwork_auth'
+    `);
+    const role = catalog.rows[0];
+    expect(role?.rolsuper).toBe(false);
+    expect(role?.rolbypassrls).toBe(false);
+    expect(role?.rolcanlogin).toBe(true);
+    expect(role?.app_can_assume).toBe(false);
+
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const connected = await auth.query<{
+        current_user: string;
+        rolsuper: boolean;
+        rolbypassrls: boolean;
+      }>("select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user");
+      expect(connected.rows[0]?.current_user).toBe("groundwork_auth");
+      expect(connected.rows[0]?.rolsuper).toBe(false);
+      expect(connected.rows[0]?.rolbypassrls).toBe(false);
+    } finally {
+      await auth.end();
+    }
+  });
+
+  it("refuses session, account, and verification reads from the app role", async () => {
+    const userId = createId();
+    const sessionId = createId();
+    const accountId = createId();
+    const verificationId = createId();
+    const admin = requireAdmin();
+    await admin.query(`insert into app_user (id, name, email) values ($1, 'Hidden', $2)`, [
+      userId,
+      `${userId}@example.com`,
+    ]);
+    await admin.query(
+      `insert into session (id, user_id, token, expires_at)
+       values ($1, $2, $3, now() + interval '1 day')`,
+      [sessionId, userId, `token-${sessionId}`],
+    );
+    await admin.query(
+      `insert into account (id, account_id, provider_id, user_id)
+       values ($1, $2, 'credential', $3)`,
+      [accountId, userId, userId],
+    );
+    await admin.query(
+      `insert into verification (id, identifier, value, expires_at)
+       values ($1, $2, 'secret', now() + interval '1 day')`,
+      [verificationId, `${userId}@example.com`],
+    );
+
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      for (const table of ["session", "account", "verification"] as const) {
+        await expect(app.query(`select count(*)::int as n from ${table}`)).rejects.toThrow(
+          /permission denied/i,
+        );
+      }
+      await app.query("begin");
+      try {
+        await app.query("select set_config('app.workspace_id', $1, true)", [createId()]);
+        await app.query("select set_config('app.user_id', $1, true)", [userId]);
+        await expect(
+          app.query("select id from session where id = $1", [sessionId]),
+        ).rejects.toThrow(/permission denied/i);
+      } finally {
+        await app.query("rollback");
+      }
+
+      const sessions = await auth.query<{ id: string }>("select id from session where id = $1", [
+        sessionId,
+      ]);
+      const accounts = await auth.query<{ id: string }>("select id from account where id = $1", [
+        accountId,
+      ]);
+      const verifications = await auth.query<{ id: string }>(
+        "select id from verification where id = $1",
+        [verificationId],
+      );
+      expect(sessions.rows.map((row) => row.id)).toEqual([sessionId]);
+      expect(accounts.rows.map((row) => row.id)).toEqual([accountId]);
+      expect(verifications.rows.map((row) => row.id)).toEqual([verificationId]);
+    } finally {
+      app.release();
+      await auth.end();
+      await admin.query("delete from verification where id = $1", [verificationId]);
+      await admin.query("delete from account where id = $1", [accountId]);
+      await admin.query("delete from session where id = $1", [sessionId]);
+      await admin.query("delete from app_user where id = $1", [userId]);
+    }
   });
 
   it("connects the app as a role that cannot bypass row security", async () => {
@@ -209,6 +320,113 @@ describe("row level security", () => {
     await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   });
 
+  it("forces row security on the auth tables", async () => {
+    const result = await requireAdmin().query<{
+      relname: string;
+      relrowsecurity: boolean;
+      relforcerowsecurity: boolean;
+    }>(
+      `
+        select c.relname, c.relrowsecurity, c.relforcerowsecurity
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = any($1::text[])
+      `,
+      [AUTH_TABLES],
+    );
+    expect(result.rows).toHaveLength(AUTH_TABLES.length);
+    for (const row of result.rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it("hides workspaces, members, and custom roles until the tenant setting is present", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const userA = createId();
+    const userB = createId();
+    const memberA = createId();
+    const memberB = createId();
+    const customRole = createId();
+    const admin = requireAdmin();
+    await admin.query(
+      `insert into app_user (id, name, email) values ($1, 'A', $2), ($3, 'B', $4)`,
+      [userA, `${userA}@example.com`, userB, `${userB}@example.com`],
+    );
+    await admin.query(
+      `insert into workspace (id, name, slug) values ($1, 'A', $2), ($3, 'B', $4)`,
+      [workspaceA, `a-${workspaceA.slice(0, 8)}`, workspaceB, `b-${workspaceB.slice(0, 8)}`],
+    );
+    await admin.query(
+      `insert into member (id, workspace_id, user_id, role, role_id, status)
+       values ($1, $2, $3, 'owner', '018f3c2e-7b10-7000-8000-000000000001', 'active'),
+              ($4, $5, $6, 'owner', '018f3c2e-7b10-7000-8000-000000000001', 'active')`,
+      [memberA, workspaceA, userA, memberB, workspaceB, userB],
+    );
+    await admin.query(
+      `insert into "role" (id, workspace_id, name, permissions, is_system)
+       values ($1, $2, 'custom', array[]::text[], false)`,
+      [customRole, workspaceA],
+    );
+
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const hiddenWorkspaces = await app.query<{ n: number }>(
+        "select count(*)::int as n from workspace",
+      );
+      const hiddenMembers = await app.query<{ n: number }>("select count(*)::int as n from member");
+      const hiddenInvites = await app.query<{ n: number }>(
+        "select count(*)::int as n from invitation",
+      );
+      const systemRoles = await app.query<{ n: number }>(
+        `select count(*)::int as n from "role" where is_system`,
+      );
+      const customHidden = await app.query<{ n: number }>(
+        `select count(*)::int as n from "role" where id = $1`,
+        [customRole],
+      );
+      expect(hiddenWorkspaces.rows[0]?.n).toBe(0);
+      expect(hiddenMembers.rows[0]?.n).toBe(0);
+      expect(hiddenInvites.rows[0]?.n).toBe(0);
+      expect(systemRoles.rows[0]?.n).toBe(6);
+      expect(customHidden.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const seenWorkspaces = await app.query<{ id: string }>("select id from workspace");
+      const seenMembers = await app.query<{ id: string }>("select id from member");
+      const seenCustom = await app.query<{ id: string }>(
+        `select id from "role" where not is_system`,
+      );
+      await app.query("rollback");
+      expect(seenWorkspaces.rows.map((row) => row.id)).toEqual([workspaceA]);
+      expect(seenMembers.rows.map((row) => row.id)).toEqual([memberA]);
+      expect(seenCustom.rows.map((row) => row.id)).toEqual([customRole]);
+
+      const asAuth = await auth.query<{ n: number }>(
+        "select count(*)::int as n from app_user where id = $1",
+        [userA],
+      );
+      const asApp = await app.query<{ n: number }>(
+        "select count(*)::int as n from app_user where id = $1",
+        [userB],
+      );
+      expect(asAuth.rows[0]?.n).toBe(1);
+      expect(asApp.rows[0]?.n).toBe(0);
+    } finally {
+      app.release();
+      await auth.end();
+      await admin.query(`delete from "role" where id = $1`, [customRole]);
+      await admin.query("delete from member where id = any($1::text[])", [[memberA, memberB]]);
+      await admin.query("delete from workspace where id = any($1::text[])", [
+        [workspaceA, workspaceB],
+      ]);
+      await admin.query("delete from app_user where id = any($1::text[])", [[userA, userB]]);
+    }
+  });
+
   it("reverts every applied migration and applies them again", async () => {
     await disconnect();
     const versions = listUpMigrations().map((name) => name.replace(/\.sql$/, ""));
@@ -221,9 +439,13 @@ describe("row level security", () => {
 
     const check = createPool(readDatabaseUrl());
     const missing = await check.query<{ name: string | null }>(
+      "select to_regclass('public.app_user')::text as name",
+    );
+    const file = await check.query<{ name: string | null }>(
       "select to_regclass('public.file')::text as name",
     );
     expect(missing.rows[0]?.name).toBeNull();
+    expect(file.rows[0]?.name).toBeNull();
     const imagery = await check.query<{ name: string | null }>(
       "select to_regclass('public.imagery_capture')::text as name",
     );

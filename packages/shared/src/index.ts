@@ -6,5 +6,28 @@ export {
   type MeasurementKind,
   type UnitsPreference,
 } from "./enums.js";
+export { applyCostVisibility, CATALOG_VISIBILITY_SAMPLE } from "./cost.js";
 export { createId, formatHumanNumber, isHumanNumber, isUuidV7 } from "./ids.js";
+export {
+  hasPermission,
+  isSystemRoleName,
+  PERMISSIONS,
+  SYSTEM_ROLE_NAMES,
+  SYSTEM_ROLE_PERMISSIONS,
+  type Permission,
+  type SystemRoleName,
+} from "./permissions.js";
 export { PROBLEM_JSON_CONTENT_TYPE, problem, problemSchema, type Problem } from "./problem.js";
+export {
+  assertInviteCurrent,
+  assertKeepsAnOwner,
+  IllegalMemberTransitionError,
+  INVITE_TTL_MS,
+  InviteExpiredError,
+  inviteExpiresAt,
+  isMemberStatus,
+  LastOwnerError,
+  MEMBER_STATUSES,
+  transitionMember,
+  type MemberStatus,
+} from "./state/member.js";
