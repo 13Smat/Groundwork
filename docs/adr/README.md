@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0004.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0005.
 
 | ADR | Title |
 | --- | --- |
@@ -8,3 +8,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0001](0001-stack.md) | Clean-room stack, planned hosts, local Docker |
 | [0002](0002-better-auth.md) | Better Auth with the organizations plugin |
 | [0003](0003-dropbox-sign.md) | Dropbox Sign behind a SignatureProvider |
+| [0004](0004-node-24.md) | Node 24 LTS |
