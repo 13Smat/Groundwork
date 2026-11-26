@@ -36,7 +36,7 @@ Estimating 1 has migration `0011` and ADR 0015. AI Assist 1 shipped migration `0
 - The Takeoffs tab reads `GET /jobs/:id/takeoffs`. The editor URL still opens one takeoff.
 - Tiles for Helene and the seeded NC orthos 404 until those COGs exist. The paper background shows through. Drawing and save still work.
 - Holes, snap, undo/redo, PNG export, and multi-parcel select stay in part 3. The ruler is the only measure-only tool in this slice.
-- ADR 0015 stays reserved for estimating. ADR 0016 is the AI assist decision. The next free number is 0017.
+- ADR 0015 is the estimating engine. ADR 0016 is the AI assist decision. The next free number is 0017.
 
 ## References
 
