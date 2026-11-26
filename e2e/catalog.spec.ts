@@ -6,6 +6,14 @@ function email(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}@example.com`;
 }
 
+async function createWorkspace(page: Page, company: string): Promise<void> {
+  await page.getByLabel("Company name").fill(company);
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  // The office nav is already on this page. Opening Catalog before the
+  // workspace exists redirects back here, and the form never shows.
+  await expect(page.getByText("No jobs yet")).toBeVisible();
+}
+
 async function signUp(page: Page, name: string, address: string): Promise<void> {
   await page.goto("/sign-up");
   await page.getByLabel("Name").fill(name);
@@ -46,9 +54,7 @@ test("a recipe validates, previews, and versions without changing the active for
 }) => {
   test.setTimeout(120_000);
   await signUp(page, "Recipe Owner", email("recipe-owner"));
-  await page.getByLabel("Company name").fill("Recipe Office Co");
-  await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await createWorkspace(page, "Recipe Office Co");
 
   await page.getByRole("link", { name: "Catalog", exact: true }).click();
   await page.getByLabel("New item name").fill("Hot mix");
@@ -92,8 +98,7 @@ test("a recipe validates, previews, and versions without changing the active for
 test("csv import previews the sku diff before it writes", async ({ page }) => {
   test.setTimeout(90_000);
   await signUp(page, "Csv Owner", email("csv-owner"));
-  await page.getByLabel("Company name").fill("Csv Co");
-  await page.getByRole("button", { name: "Create workspace" }).click();
+  await createWorkspace(page, "Csv Co");
   await page.getByRole("link", { name: "Catalog", exact: true }).click();
   await page.getByLabel("New item name").fill("Base stone");
   await page.getByLabel("New item unit", { exact: true }).fill("ton");
@@ -128,8 +133,7 @@ test("office sees no unit cost and an estimator can edit it", async ({ page }) =
   const office = email("cost-office");
   const estimator = email("cost-estimator");
   await signUp(page, "Cost Owner", owner);
-  await page.getByLabel("Company name").fill("Cost Visibility Co");
-  await page.getByRole("button", { name: "Create workspace" }).click();
+  await createWorkspace(page, "Cost Visibility Co");
   await page.getByRole("link", { name: "Catalog", exact: true }).click();
   await page.getByLabel("New item name").fill("Crushed stone");
   await page.getByLabel("New item unit", { exact: true }).fill("ton");
