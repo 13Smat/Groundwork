@@ -22,6 +22,7 @@ import { registerImageryRoutes, type ImageryRouteOptions } from "./imagery/route
 import { createLogger } from "./logging.js";
 import { registerCatalogRoutes } from "./catalog/routes.js";
 import { registerGroundworkRoutes } from "./routes/groundwork.js";
+import { registerEstimateRoutes } from "./estimating/routes.js";
 import { registerTakeoffRoutes } from "./takeoff/routes.js";
 
 export async function buildApp(options?: {
@@ -91,6 +92,11 @@ export async function buildApp(options?: {
       auth,
     });
     await registerTakeoffRoutes(app, {
+      db,
+      authPool: options.database.auth,
+      auth,
+    });
+    await registerEstimateRoutes(app, {
       db,
       authPool: options.database.auth,
       auth,

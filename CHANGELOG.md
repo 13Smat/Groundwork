@@ -2,9 +2,19 @@
 
 ## Unreleased
 
+### Spec 07 part 1 — Takeoff-to-estimate engine
+
+- Added `0011_estimating.sql` for `estimate` and `line_item`. Tenant row security is forced. `groundwork_app` is the only grantee. ADR 0015. The estimate points at `takeoff.id`.
+- `Estimate.status` lives in `packages/shared`. `draft -> ready -> sent -> accepted`, `ready -> draft`, and `ready|sent -> superseded`. Leaving draft writes `snapshot`. A flagged or unresolved line blocks `ready` with 409.
+- `packages/pricing` prices a recipe component through `previewRecipe`, rounds each line half-even to cents, and sums those cents. Optional lines stay out of the headline totals. A blank material tax code is `materials`. `tax_rate` is a fraction. Markup and overhead are percents.
+- Added estimate and line routes. Generation reads the active recipe and pins `recipe_id` plus `recipe_version`. A variable patch reprices that line. Recalculate reprices a draft from the pinned component and the current catalog cost, and skips a line whose money did not change. `GET` of a non-draft estimate returns the snapshot. `template_id` is 400.
+- The first estimate number in a workspace is `E-1001`. A negative line needs `catalog.manage`. Roles without that token do not receive cost or margin fields. Mutations write `audit_log` without those fields.
+- CI runs `pnpm test:estimating` in the `db` job. The tests cover the measurement's cents against `linesFromGroups`, a variable override that leaves the other line's `updated_at` alone, a ready snapshot after a recipe edit and a catalog cost change, office cost hiding, the flagged 409, and cross-tenant row security.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Spec 05 part 1 — CV contract, chip crop, and mock SAM adapter
 
-- Added `0012_detection.sql` for `detection_run` and `detection_feature`. Tenant row security is forced. `groundwork_app` is the only grantee. `usage_event` from `0001` is the usage log (`kind = cv_infer`). ADR 0016. `0010` and `0011` were not taken.
+- Added `0012_detection.sql` for `detection_run` and `detection_feature`. Tenant row security is forced. `groundwork_app` is the only grantee. `usage_event` from `0001` is the usage log (`kind = cv_infer`). ADR 0016.
 - `DetectionRun` lives in `packages/shared`. `queued -> running -> succeeded | failed | cancelled`, then `succeeded -> accepted_partial | accepted_all`. A failed run is not restarted on the same row.
 - `services/cv` serves `POST /segment/prompt` and a classes stub. `CV_BACKEND=mock` is deterministic and spends nothing. `CV_BACKEND=sam2` raises before importing torch. Dependencies are hashed pins from `pip-compile`.
 - `POST /takeoffs/:id/assist` is off unless `GROUNDWORK_AI_ASSIST=1` and `workspace.features.ai_assist` is true. It reuses `requireMeasurableCapture` (403 for Google, Mapbox, viewing, and unverified captures), refuses a site the chosen capture does not cover, crops the COG from MinIO, simplifies, georeferences to EPSG:4326, clips to the site, and drops polygons under 2 m². The same idempotency key and body replay the run.

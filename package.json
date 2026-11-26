@@ -17,6 +17,7 @@
     "test:auth": "pnpm build:api-deps && vitest run --config vitest.auth.config.ts",
     "test:crm": "pnpm build:api-deps && vitest run --config vitest.crm.config.ts",
     "test:takeoff": "pnpm build:api-deps && vitest run --config vitest.takeoff.config.ts",
+    "test:estimating": "pnpm build:api-deps && vitest run --config vitest.estimating.config.ts",
     "test:assist": "pnpm build:api-deps && vitest run --config vitest.assist.config.ts",
     "test:cv": "sh scripts/test-cv.sh",
     "test:e2e": "pnpm build:api-deps && playwright test",

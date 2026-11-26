@@ -94,6 +94,9 @@ jobs:
       - name: Takeoff and measurements
         run: pnpm test:takeoff
 
+      - name: Estimating
+        run: pnpm test:estimating
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

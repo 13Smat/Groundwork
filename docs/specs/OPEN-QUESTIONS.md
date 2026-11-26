@@ -82,6 +82,8 @@ The header says `id uuid` plus `created_at` and `updated_at`. The sketch uses `b
 
 `docs/specs/06-catalog-cost-recipes.md` and `docs/specs/07-estimating.md` describe per-line variable overrides, line-level markup and overhead, a tax code, a recipe version, and a flagged line (a line that blocks `ready`). The `line_item` sketch in `docs/specs/01-data-model.md` has none of `variables`, `markup_pct`, `overhead_pct`, `tax_code`, `recipe_version`, or `flagged`.
 
+[ADR 0015](../adr/0015-estimating-engine.md) adds those columns, plus `recipe_component_id`, `catalog_item_id`, `takeoff_item_id`, `input_qty`, `input_unit`, `cost_cents`, `price_cents`, `tax_cents`, `price_overridden`, `optional`, and `measurement_ids`. `variables` stores overrides only. `qty` stays `numeric(14,4)`. `input_qty` is text so a recalculation can reuse the formula input. `price_cents` is the line amount. The group column is `grp` because `group` is reserved in SQL. The response field is `group`. The spec files were not edited.
+
 ## Proposal public token, selected options, and public endpoints
 
 `docs/specs/08-proposals-esign.md` sends the client to a public signed URL to pick optional items before the PDF is sent for signature. The `proposal` sketch has no `public_token_hash` and no `selected_optional_line_ids`. The spec 08 route table has no unauthenticated public proposal endpoints.
@@ -101,6 +103,16 @@ Spec 06 writes `inputQty` and `referencedVars`. The API uses snake_case (`input_
 ## Spec 07 `templateId` vs the v1 deferral
 
 `POST /jobs/:id/estimates` in `docs/specs/07-estimating.md` accepts `templateId`. The same spec's out-of-scope line says a templates library beyond "clone estimate" is v1. Whether `templateId` exists at MVP is unspecified.
+
+ADR 0015 rejects `template_id` with 400. It does not clone an estimate. The question is still open.
+
+## Estimate rates, tax, discounts, and the snapshot
+
+Spec 07 names markup, overhead, and tax and does not say whether the stored rates are percents or fractions. ADR 0015 stores markup and overhead as percents and `tax_rate` as a fraction from 0 to 1. A line is taxed when its tax code matches `material` or `materials`. A blank catalog tax code becomes `materials` for a material item.
+
+Spec 07 says a negative line needs permission. Spec 02 has no discount token. ADR 0015 uses `catalog.manage` and does not add one. Roles without that token do not receive cost or margin fields. Office has `estimate.read` and not `estimate.*`.
+
+The spec 01 sketch has `snapshot jsonb` and does not say when it is written or what it holds. ADR 0015 writes the view, including costs, when the estimate leaves draft. `GET` of a non-draft row returns that snapshot. `accepted` does not require a signature. That is spec 08. Quantity diff and estimate versions are spec 07 part 2. The spec files were not edited.
 
 ## Node 22 vs 24
 
