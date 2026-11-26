@@ -3,7 +3,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["apps/api/test/takeoff.integration.test.ts"],
+    include: [
+      "apps/api/test/takeoff.integration.test.ts",
+      "apps/api/test/assist-review.integration.test.ts",
+    ],
     fileParallelism: false,
     sequence: { concurrent: false },
     testTimeout: 60_000,

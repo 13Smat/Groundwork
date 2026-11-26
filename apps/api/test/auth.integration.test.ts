@@ -82,6 +82,9 @@ const TENANT_ROUTES = [
   "put /takeoffs/{id}/measurements",
   "delete /measurements/{id}",
   "post /takeoffs/{id}/assist",
+  "get /detections/{id}",
+  "post /detections/{id}/accept",
+  "post /detections/{id}/reject",
   "get /takeoffs/{id}/summary",
   "post /jobs/{id}/estimates",
   "get /estimates/{id}",
@@ -313,6 +316,10 @@ function tenantPayload(
         takeoff_item_id: createId(),
         points: [{ lng: -81.7, lat: 35.75, label: 1 }],
       };
+    case "post /detections/{id}/accept":
+      return { all: true };
+    case "post /detections/{id}/reject":
+      return { all: true };
     case "post /jobs/{id}/estimates":
       return {};
     case "patch /estimates/{id}":
@@ -716,7 +723,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|takeoffs|measurements|estimates|line-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|takeoffs|measurements|detections|estimates|line-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
