@@ -30,7 +30,10 @@ const UNCLASSIFIED_REASONS: Record<string, string> = {
     "Public-program captures have a null workspace_id. A workspace capture sets it. ADR 0006.",
 };
 
-/** Better Auth writes these tenant tables. Product tables are groundwork_app only. */
+/**
+ * Better Auth writes these tenant tables. Product tables are groundwork_app only.
+ * Their WITH CHECK may be only the groundwork_auth branch. ADR 0007 and ADR 0023.
+ */
 const AUTH_GRANT_TABLES = new Set(["member", "invitation"]);
 
 type TableFact = {
@@ -150,6 +153,94 @@ describe("schema audit", () => {
         .map((predicate) => `${policy.cmd} ${policy.table}.${policy.name}: ${predicate}`);
     });
     expect(offenders).toEqual([]);
+  });
+
+  it("requires WITH CHECK naming app.workspace_id on tenant insert, update, and all policies", async () => {
+    expect(
+      tenantWriteCheckOk("client", "workspace_id = current_setting('app.workspace_id', true)"),
+    ).toBe(true);
+    expect(tenantWriteCheckOk("client", "current_user = 'groundwork_auth'")).toBe(false);
+    expect(tenantWriteCheckOk("client", null)).toBe(false);
+    expect(tenantWriteCheckOk("member", "(CURRENT_USER = 'groundwork_auth'::name)")).toBe(true);
+    expect(tenantWriteCheckOk("invitation", "current_user = 'groundwork_auth'")).toBe(true);
+    expect(
+      tenantWriteCheckOk("member", "current_user = 'groundwork_auth' or workspace_id is null"),
+    ).toBe(false);
+    expect(
+      tenantWriteCheckOk(
+        "member",
+        "((CURRENT_USER = 'groundwork_auth'::name) OR ((workspace_id)::uuid = (NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid))",
+      ),
+    ).toBe(true);
+
+    const policies = await requireAdmin().query<{
+      table: string;
+      name: string;
+      cmd: string;
+      check: string | null;
+    }>(`
+      select c.relname as table,
+             pol.polname as name,
+             case pol.polcmd
+               when 'a' then 'INSERT'
+               when 'w' then 'UPDATE'
+               when '*' then 'ALL'
+             end as cmd,
+             pg_get_expr(pol.polwithcheck, pol.polrelid) as check
+      from pg_policy pol
+      join pg_class c on c.oid = pol.polrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and pol.polcmd in ('a', 'w', '*')
+        and exists (
+          select 1
+          from pg_attribute a
+          where a.attrelid = c.oid
+            and a.attname = 'workspace_id'
+            and a.attnotnull
+            and not a.attisdropped
+        )
+    `);
+    const offenders = policies.rows
+      .filter((policy) => !tenantWriteCheckOk(policy.table, policy.check))
+      .map(
+        (policy) =>
+          `${policy.cmd} ${policy.table}.${policy.name}: ${policy.check ?? "(no WITH CHECK)"}`,
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("stores proposal public tokens only as SHA-256 hex columns", async () => {
+    const columns = await requireAdmin().query<{ table: string; column: string }>(`
+      select c.relname as table, a.attname as column
+      from pg_attribute a
+      join pg_class c on c.oid = a.attrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relname in ('proposal', 'proposal_token')
+        and a.attnum > 0
+        and not a.attisdropped
+        and a.attname ilike '%token%'
+      order by 1, 2
+    `);
+    expect(columns.rows).toEqual([
+      { table: "proposal", column: "public_token_hash" },
+      { table: "proposal_token", column: "token_hash" },
+    ]);
+
+    const checks = await requireAdmin().query<{ definition: string }>(`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where contype = 'c'
+        and conrelid in ('proposal'::regclass, 'proposal_token'::regclass)
+        and pg_get_constraintdef(oid) ilike '%token_hash%'
+    `);
+    const definitions = checks.rows.map((row) => row.definition);
+    expect(definitions.some((definition) => definition.includes("public_token_hash"))).toBe(true);
+    expect(definitions.some((definition) => definition.includes("token_hash"))).toBe(true);
+    for (const definition of definitions) {
+      expect(definition).toContain("^[0-9a-f]{64}$");
+    }
   });
 
   it("has no security definer function and no bypass on the app roles", async () => {
@@ -272,6 +363,28 @@ function allowsNullWorkspace(predicate: string): boolean {
 
 function isOperatorWrite(predicate: string): boolean {
   return predicate.includes("app.platform_operator");
+}
+
+function tenantWriteCheckOk(table: string, check: string | null): boolean {
+  if (check?.includes("app.workspace_id")) {
+    return true;
+  }
+  return AUTH_GRANT_TABLES.has(table) && isGroundworkAuthBranch(check);
+}
+
+function isGroundworkAuthBranch(check: string | null): boolean {
+  if (!check) {
+    return false;
+  }
+  const normalized = check.toLowerCase().replaceAll("::name", "");
+  if (!normalized.includes("current_user = 'groundwork_auth'")) {
+    return false;
+  }
+  const rest = normalized
+    .replaceAll("current_user = 'groundwork_auth'", "")
+    .replace(/\bor\b/g, "")
+    .replace(/[()\s]/g, "");
+  return rest.length === 0;
 }
 
 function quote(name: string): string {

@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next free number is 0024. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. Takeoff tools and export are 0017. Accepting an AI assist draft is 0018. Estimate quantity sync and versions are 0019. Proposal PDFs are 0020. E-sign and the won flow are 0021. Migrations 0013 and 0014 are unused. The CRM UI shipped without a new ADR. OpenAPI drift and the tenant audit are 0023. Migration `0018` is the invoker function and the tighter imagery admin policies.
+One ADR per decision. Include the alternatives and why they lost. The next free number is 0025. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. Takeoff tools and export are 0017. Accepting an AI assist draft is 0018. Estimate quantity sync and versions are 0019. Proposal PDFs are 0020. E-sign and the won flow are 0021. Migrations 0013 and 0014 are unused. The CRM UI shipped without a new ADR. OpenAPI drift and the tenant audit are 0023. Migration `0018` is the invoker function and the tighter imagery admin policies.
 
 | ADR | Title |
 | --- | --- |
@@ -27,3 +27,4 @@ One ADR per decision. Include the alternatives and why they lost. The next free 
 | [0021](0021-esign-won-flow.md) | E-sign adapter, public options, and the won flow |
 | [0022](0022-onboarding-and-demo-seed.md) | Onboarding flag and the demo seed |
 | [0023](0023-openapi-and-tenant-audit.md) | OpenAPI artifact, tenant sweep, and the schema audit |
+| [0024](0024-public-token-404.md) | Public token 404 parity and the WITH CHECK audit |

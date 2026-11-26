@@ -8,6 +8,19 @@ function redactUrl(url: string | undefined): string | undefined {
   return url.replace(/\/public\/proposals\/[^/?]+/g, "/public/proposals/[redacted]");
 }
 
+/**
+ * Problem `instance` for a public proposal URL. Every token becomes the same
+ * placeholder, so two links cannot be told apart by the path in the body.
+ */
+export function publicProposalInstance(url: string): string {
+  const path = url.split("?")[0] ?? url;
+  const redacted = path.replace(/\/public\/proposals\/[^/]+/g, "/public/proposals/{token}");
+  if (redacted === path) {
+    return url;
+  }
+  return redacted;
+}
+
 const REDACTED = "[redacted]";
 
 export function createLoggerOptions(): LoggerOptions {

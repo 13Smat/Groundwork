@@ -13139,8 +13139,6 @@
             "name": "token",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 20,
               "type": "string"
             }
           }
@@ -13282,8 +13280,6 @@
             "name": "token",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 20,
               "type": "string"
             }
           }
@@ -13451,8 +13447,6 @@
             "name": "token",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 20,
               "type": "string"
             }
           }

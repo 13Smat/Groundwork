@@ -15,6 +15,21 @@ export function hashPublicToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Issued tokens are 43 characters. A longer value is hashed from a prefix so
+ * one huge URL cannot skip the lookup or dominate the digest. The stored
+ * hash is still the SHA-256 of the token that was issued.
+ */
+export const PUBLIC_TOKEN_HASH_INPUT_MAX = 200;
+
+export function hashPublicTokenForLookup(token: string): string {
+  const material =
+    token.length > PUBLIC_TOKEN_HASH_INPUT_MAX
+      ? token.slice(0, PUBLIC_TOKEN_HASH_INPUT_MAX)
+      : token;
+  return hashPublicToken(material);
+}
+
 export function isPublicTokenHash(value: string): boolean {
   return /^[0-9a-f]{64}$/.test(value);
 }

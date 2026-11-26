@@ -10,6 +10,7 @@ import {
   type JobStage,
   type ProposalStatus,
 } from "@groundwork/shared";
+import type { FastifyBaseLogger } from "fastify";
 import { sql, type Kysely, type Transaction } from "kysely";
 
 import type { Mailer } from "../auth/mail.js";
@@ -28,7 +29,7 @@ import { getProposal, loadProposalForRender, type ProposalView } from "./data.js
 import type { EsignEvent, EsignProvider, EsignSigner } from "./esign.js";
 import { missingPdf, type ProposalFiles } from "./files.js";
 import { rerenderRenderedProposal } from "./render.js";
-import { hashPublicToken, issuePublicToken, timingSafeEqualHex } from "./token.js";
+import { hashPublicTokenForLookup, issuePublicToken, timingSafeEqualHex } from "./token.js";
 
 type Trx = Transaction<Database>;
 type Db = Kysely<Database>;
@@ -50,8 +51,19 @@ function notFound(detail: string): ProblemError {
   return new ProblemError({ status: 404, title: "Not Found", detail });
 }
 
-function gone(detail: string): ProblemError {
-  return new ProblemError({ status: 410, title: "Gone", detail });
+/** One problem document for every public token that must not be distinguished. */
+const PUBLIC_LINK_UNAVAILABLE = {
+  status: 404,
+  title: "Not Found",
+  type: "about:blank",
+  detail: "This link isn't available.",
+  instance: "/public/proposals/{token}",
+} as const;
+
+type PublicLinkReason = "unknown" | "void" | "expired" | "superseded" | "used";
+
+export function unavailablePublicLink(): ProblemError {
+  return new ProblemError(PUBLIC_LINK_UNAVAILABLE);
 }
 
 function badRequest(detail: string): ProblemError {
@@ -129,21 +141,20 @@ async function audit(
     .execute();
 }
 
-type LinkResult<T> = { closed: "gone" } | { closed: "missing" } | { closed: null; value: T };
+type LinkResult<T> = { closed: PublicLinkReason } | { closed: null; value: T };
 
 /**
  * Resolve a public token by its hash, then set the workspace. The raw token
- * is compared only as a SHA-256 digest, in constant time.
+ * is compared only as a SHA-256 digest, in constant time. Every rejection
+ * returns the same 404. The reason is logged without the token or its hash.
  */
 export async function withPublicProposal<T>(
   db: Db,
   token: string,
   fn: (trx: Trx, row: SelectableProposal) => Promise<T>,
+  log?: FastifyBaseLogger,
 ): Promise<T> {
-  if (token.length < 20 || token.length > 200) {
-    throw notFound("That proposal link was not found.");
-  }
-  const computed = hashPublicToken(token);
+  const computed = hashPublicTokenForLookup(token);
   const result = await withTenantTransaction(db, async (trx): Promise<LinkResult<T>> => {
     await setProposalTokenHash(trx, computed);
     const link = await trx
@@ -154,7 +165,7 @@ export async function withPublicProposal<T>(
     const stored = link?.token_hash ?? "0".repeat(64);
     if (!link || !timingSafeEqualHex(stored, computed)) {
       timingSafeEqualHex(computed, "0".repeat(64));
-      return { closed: "missing" };
+      return { closed: "unknown" };
     }
     await setWorkspaceId(trx, link.workspace_id);
     const row = await trx
@@ -163,15 +174,18 @@ export async function withPublicProposal<T>(
       .where("id", "=", link.proposal_id)
       .executeTakeFirst();
     if (!row || !timingSafeEqualHex(row.public_token_hash, computed)) {
-      return { closed: "missing" };
+      return { closed: row ? "used" : "unknown" };
     }
     const estimate = await trx
       .selectFrom("estimate")
       .select("status")
       .where("id", "=", row.estimate_id)
       .executeTakeFirst();
-    if (row.status === "void" || row.status === "expired" || estimate?.status === "superseded") {
-      return { closed: "gone" };
+    if (row.status === "void") {
+      return { closed: "void" };
+    }
+    if (row.status === "expired" || estimate?.status === "superseded") {
+      return { closed: estimate?.status === "superseded" ? "superseded" : "expired" };
     }
     if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
       if (row.status === "sent" || row.status === "viewed") {
@@ -181,18 +195,16 @@ export async function withPublicProposal<T>(
           .where("id", "=", row.id)
           .execute();
       }
-      return { closed: "gone" };
+      return { closed: "expired" };
     }
     if (row.status === "draft") {
-      return { closed: "missing" };
+      return { closed: "unknown" };
     }
     return { closed: null, value: await fn(trx, row) };
   });
-  if (result.closed === "missing") {
-    throw notFound("That proposal link was not found.");
-  }
-  if (result.closed === "gone") {
-    throw gone("That proposal link is no longer available.");
+  if (result.closed) {
+    log?.info({ reason: result.closed }, "public proposal link unavailable");
+    throw unavailablePublicLink();
   }
   return result.value;
 }
@@ -264,19 +276,25 @@ export async function savePublicOptions(
     lineIds: readonly string[];
     files: ProposalFiles;
     renderPdf: (html: string) => Promise<Buffer>;
+    log?: FastifyBaseLogger;
   },
 ): Promise<ProposalView> {
-  const saved = await withPublicProposal(db, input.token, async (trx, row) => {
-    if (row.status !== "rendered") {
-      throw conflict("Optional items are closed once the proposal is sent.");
-    }
-    await setSelectedLines(trx, row.id, input.lineIds);
-    return {
-      workspaceId: row.workspace_id,
-      proposalId: row.id,
-      actorMemberId: row.created_by,
-    };
-  });
+  const saved = await withPublicProposal(
+    db,
+    input.token,
+    async (trx, row) => {
+      if (row.status !== "rendered") {
+        throw conflict("Optional items are closed once the proposal is sent.");
+      }
+      await setSelectedLines(trx, row.id, input.lineIds);
+      return {
+        workspaceId: row.workspace_id,
+        proposalId: row.id,
+        actorMemberId: row.created_by,
+      };
+    },
+    input.log,
+  );
   await rerenderRenderedProposal(
     db,
     {

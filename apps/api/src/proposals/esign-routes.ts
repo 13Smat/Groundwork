@@ -22,6 +22,7 @@ import {
   parseRecipients,
   savePublicOptions,
   sendProposal,
+  unavailablePublicLink,
   voidProposal,
   withPublicProposal,
 } from "./esign-flow.js";
@@ -69,6 +70,8 @@ const publicLine = z.object({
   optional: z.boolean(),
   selected: z.boolean(),
 });
+
+const publicToken = z.object({ token: z.string() });
 
 const publicSchema = z.object({
   number: z.string(),
@@ -282,25 +285,30 @@ export async function registerEsignRoutes(
     {
       schema: {
         tags: [...PUBLIC],
-        params: z.object({ token: z.string().min(20).max(200) }),
+        params: publicToken,
         response: { 200: publicSchema },
       },
     },
     async (request) => {
       limit(request, "public");
-      return withPublicProposal(ctx.db, request.params.token, async (trx, row) => {
-        const view = await getProposal(trx, row.id);
-        const workspace = await trx
-          .selectFrom("workspace")
-          .select("name")
-          .where("id", "=", row.workspace_id)
-          .executeTakeFirst();
-        return publicBody(
-          view,
-          workspace?.name ?? "Workspace",
-          esign.name === FAKE_PROVIDER && (view.status === "sent" || view.status === "viewed"),
-        );
-      });
+      return withPublicProposal(
+        ctx.db,
+        request.params.token,
+        async (trx, row) => {
+          const view = await getProposal(trx, row.id);
+          const workspace = await trx
+            .selectFrom("workspace")
+            .select("name")
+            .where("id", "=", row.workspace_id)
+            .executeTakeFirst();
+          return publicBody(
+            view,
+            workspace?.name ?? "Workspace",
+            esign.name === FAKE_PROVIDER && (view.status === "sent" || view.status === "viewed"),
+          );
+        },
+        request.log,
+      );
     },
   );
 
@@ -309,7 +317,7 @@ export async function registerEsignRoutes(
     {
       schema: {
         tags: [...PUBLIC],
-        params: z.object({ token: z.string().min(20).max(200) }),
+        params: publicToken,
         body: z.object({ selected_optional_line_ids: z.array(z.uuidv7()).max(200) }),
         response: { 200: publicSchema },
       },
@@ -321,16 +329,22 @@ export async function registerEsignRoutes(
         lineIds: request.body.selected_optional_line_ids,
         files,
         renderPdf,
+        log: request.log,
       });
-      return withPublicProposal(ctx.db, request.params.token, async (trx, row) => {
-        const current = await getProposal(trx, row.id);
-        const workspace = await trx
-          .selectFrom("workspace")
-          .select("name")
-          .where("id", "=", row.workspace_id)
-          .executeTakeFirst();
-        return publicBody(current, workspace?.name ?? "Workspace", false);
-      });
+      return withPublicProposal(
+        ctx.db,
+        request.params.token,
+        async (trx, row) => {
+          const current = await getProposal(trx, row.id);
+          const workspace = await trx
+            .selectFrom("workspace")
+            .select("name")
+            .where("id", "=", row.workspace_id)
+            .executeTakeFirst();
+          return publicBody(current, workspace?.name ?? "Workspace", false);
+        },
+        request.log,
+      );
     },
   );
 
@@ -339,7 +353,7 @@ export async function registerEsignRoutes(
     {
       schema: {
         tags: [...PUBLIC],
-        params: z.object({ token: z.string().min(20).max(200) }),
+        params: publicToken,
         body: z.object({ email: z.email().max(320).optional() }),
         response: { 200: publicSchema },
       },
@@ -347,60 +361,67 @@ export async function registerEsignRoutes(
     async (request) => {
       limit(request, "public");
       if (esign.name !== FAKE_PROVIDER) {
-        throw new ProblemError({
-          status: 404,
-          title: "Not Found",
-          detail: "That action is not available.",
-        });
+        await withPublicProposal(ctx.db, request.params.token, async () => undefined, request.log);
+        throw unavailablePublicLink();
       }
-      const event = await withPublicProposal(ctx.db, request.params.token, async (_trx, row) => {
-        if (row.status !== "sent" && row.status !== "viewed") {
-          throw new ProblemError({
-            status: 409,
-            title: "Conflict",
-            detail: "Send the proposal before recording a test signature.",
-          });
-        }
-        const recipients = parseRecipients(row.recipients);
-        const email = request.body.email?.trim().toLowerCase();
-        const signer = email
-          ? recipients.find((recipient) => recipient.email === email)
-          : recipients[0];
-        if (!signer || !row.provider_envelope_id) {
-          throw new ProblemError({
-            status: 409,
-            title: "Conflict",
-            detail: "That recipient is not on this proposal.",
-          });
-        }
-        return {
-          eventId: `fake-sign:${row.provider_envelope_id}:${signer.email}`,
-          type: "signed" as const,
-          envelopeId: row.provider_envelope_id,
-          workspaceId: row.workspace_id,
-          proposalId: row.id,
-          signer,
-          signers: recipients.map((recipient) => ({
-            ...recipient,
-            signed: recipient.email === signer.email,
-          })),
-        };
-      });
+      const event = await withPublicProposal(
+        ctx.db,
+        request.params.token,
+        async (_trx, row) => {
+          if (row.status !== "sent" && row.status !== "viewed") {
+            throw new ProblemError({
+              status: 409,
+              title: "Conflict",
+              detail: "Send the proposal before recording a test signature.",
+            });
+          }
+          const recipients = parseRecipients(row.recipients);
+          const email = request.body.email?.trim().toLowerCase();
+          const signer = email
+            ? recipients.find((recipient) => recipient.email === email)
+            : recipients[0];
+          if (!signer || !row.provider_envelope_id) {
+            throw new ProblemError({
+              status: 409,
+              title: "Conflict",
+              detail: "That recipient is not on this proposal.",
+            });
+          }
+          return {
+            eventId: `fake-sign:${row.provider_envelope_id}:${signer.email}`,
+            type: "signed" as const,
+            envelopeId: row.provider_envelope_id,
+            workspaceId: row.workspace_id,
+            proposalId: row.id,
+            signer,
+            signers: recipients.map((recipient) => ({
+              ...recipient,
+              signed: recipient.email === signer.email,
+            })),
+          };
+        },
+        request.log,
+      );
       await ingestEsignEvent(ctx.db, esign, files, event, ctx.mailer);
-      return withPublicProposal(ctx.db, request.params.token, async (trx, row) => {
-        const current = await getProposal(trx, row.id);
-        const workspace = await trx
-          .selectFrom("workspace")
-          .select("name")
-          .where("id", "=", row.workspace_id)
-          .executeTakeFirst();
-        return publicBody(
-          current,
-          workspace?.name ?? "Workspace",
-          esign.name === FAKE_PROVIDER &&
-            (current.status === "sent" || current.status === "viewed"),
-        );
-      });
+      return withPublicProposal(
+        ctx.db,
+        request.params.token,
+        async (trx, row) => {
+          const current = await getProposal(trx, row.id);
+          const workspace = await trx
+            .selectFrom("workspace")
+            .select("name")
+            .where("id", "=", row.workspace_id)
+            .executeTakeFirst();
+          return publicBody(
+            current,
+            workspace?.name ?? "Workspace",
+            esign.name === FAKE_PROVIDER &&
+              (current.status === "sent" || current.status === "viewed"),
+          );
+        },
+        request.log,
+      );
     },
   );
 

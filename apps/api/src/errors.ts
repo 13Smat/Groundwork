@@ -1,5 +1,7 @@
 import { problem, PROBLEM_JSON_CONTENT_TYPE, type Problem } from "@groundwork/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
+
+import { publicProposalInstance } from "./logging.js";
 import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError,
@@ -108,15 +110,15 @@ export function registerProblemHandlers(app: FastifyInstance): void {
       problem({
         status: 404,
         title: titleFor(404),
-        detail: `No route for ${request.method} ${request.url}.`,
-        instance: request.url,
+        detail: `No route for ${request.method} ${publicProposalInstance(request.url)}.`,
+        instance: publicProposalInstance(request.url),
       }),
       true,
     );
   });
 
   app.setErrorHandler((error, request, reply) => {
-    const instance = request.url;
+    const instance = publicProposalInstance(request.url);
 
     if (isProblemError(error)) {
       sendProblem(
