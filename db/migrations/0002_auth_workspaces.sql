@@ -1,4 +1,4 @@
--- Auth and workspaces. ADR 0006.
+-- Auth and workspaces. ADR 0007.
 --
 -- Better Auth 1.7.28 binds every id as text. Postgres has no uuid = text
 -- operator, so these primary keys are text holding UUIDv7 (the check below).
@@ -43,7 +43,7 @@ create table workspace (
 
 -- "role" is a reserved word and stays quoted. System rows have a null
 -- workspace_id so they can be read without a tenant setting. Custom roles
--- (later) are workspace-scoped. ADR 0006.
+-- (later) are workspace-scoped. ADR 0007.
 create table "role" (
   id text primary key check (id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
   workspace_id text check (

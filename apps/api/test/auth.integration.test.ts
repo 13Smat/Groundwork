@@ -28,6 +28,8 @@ const TENANT_ROUTES = [
   "post /workspaces/{id}/invites",
   "patch /members/{id}",
   "get /catalog-items",
+  "get /imagery/captures",
+  "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
 ];
 
 type Session = { cookie: string; email: string };
@@ -433,6 +435,32 @@ describe("auth and workspaces", () => {
     expect(again.status).toBe(409);
   });
 
+  it("serves imagery to a member and hides it from everyone else", async () => {
+    const owner = await signUp("Imagery Owner");
+    const workspace = await createWorkspace(owner.cookie, "Imagery Co");
+    const outsider = await signUp("Imagery Outsider");
+    const bbox = "/imagery/captures?bbox=-81.95,35.52,-81.40,35.99";
+    const visible = await requireApp().inject({
+      method: "GET",
+      url: bbox,
+      headers: { ...BROWSER, cookie: owner.cookie, "x-workspace-id": workspace.id },
+    });
+    expect(visible.statusCode, visible.body).toBe(200);
+    expect(visible.json().captures.length).toBeGreaterThan(0);
+    const hidden = await requireApp().inject({
+      method: "GET",
+      url: bbox,
+      headers: { ...BROWSER, cookie: outsider.cookie, "x-workspace-id": workspace.id },
+    });
+    expect(hidden.statusCode, hidden.body).toBe(404);
+    const signedOut = await requireApp().inject({
+      method: "GET",
+      url: bbox,
+      headers: { ...BROWSER, "x-workspace-id": workspace.id },
+    });
+    expect(signedOut.statusCode).toBe(401);
+  });
+
   it("shows unit cost only to roles with catalog.manage", async () => {
     const owner = await signUp("Catalog Owner");
     const workspace = await createWorkspace(owner.cookie, "Catalog Co");
@@ -493,7 +521,7 @@ describe("auth and workspaces", () => {
         }
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
-        const tenantPath = /^\/(workspaces\/|members\/|catalog-items)/.test(path);
+        const tenantPath = /^\/(workspaces\/|members\/|catalog-items|imagery\/)/.test(path);
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
           throw new Error(`${key} is missing a tenant tag.`);
         }
@@ -501,9 +529,16 @@ describe("auth and workspaces", () => {
           continue;
         }
         seen.push(key);
-        const url = path
+        let url = path
           .replace("/workspaces/{id}", `/workspaces/${workspace.id}`)
-          .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`);
+          .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`)
+          .replace("{captureId}", createId())
+          .replace("{z}", "1")
+          .replace("{x}", "0")
+          .replace("{y}", "0");
+        if (path === "/imagery/captures") {
+          url += "?bbox=-81.95,35.52,-81.40,35.99";
+        }
         const payload =
           key === "post /workspaces/{id}/invites"
             ? { email: "nobody@example.com", roleId: ownerProfile.body.memberships[0]?.role_id }

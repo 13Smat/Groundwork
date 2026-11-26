@@ -1,26 +1,28 @@
 # Status
 
-Foundations 2 (local infra, database, row level security, and the office shell) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Auth and workspaces (spec 02) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
-- Ticket 0: `AGENTS.md`, ADR 0001 through ADR 0003, the build specs, and the open-question list.
-- Ticket 1: Node 24 LTS, pnpm workspaces, Turborepo, the Fastify API with problem+json, the Vite office shell, and `pnpm check` in GitHub Actions. ADR 0004.
-- Ticket 2: `docker-compose.yml` runs Postgres/PostGIS `16-3.4`, MinIO built from the GitHub release (Docker Hub no longer serves the image), a bucket init, Mailpit, and upstream TiTiler as a placeholder. ADR 0005.
-- SQL migrations in `db/migrations`. `pnpm db:migrate` is idempotent. `pnpm db:migrate:down` reverts the latest file. The first migration enables `postgis`, `pgcrypto`, and `citext`, and creates `counters`, `file`, `event_log`, `audit_log`, and `usage_event`.
-- Tenant tables force row level security with `workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid`. The API uses `groundwork_app`, which is not a superuser and does not bypass row security. `withWorkspaceContext` sets the workspace for one transaction.
-- `pg-boss` worker entrypoint (`pnpm worker`) on the database-owner connection. S3/MinIO presigned PUT adapter. pino redacts authorization headers. OpenTelemetry exports only when an OTLP endpoint is set.
-- `@groundwork/ui` has the button, text field, dialog, and primary nav. The office app has a keyboard-accessible shell for the spec 00 sections.
-- CI keeps the `check` job and adds a `db` job that migrates against PostGIS and runs the RLS tests.
+- Ticket 0 through Ticket 2 are on main (`dabcba3`): agent rules, the monorepo, CI, Postgres/PostGIS, MinIO, the `groundwork_app` role, `withWorkspaceContext`, and the office shell. ADR 0001 through ADR 0005.
+- Imagery registry and TiTiler are on main (`2fe041f`). Migration `0003_imagery.sql`, the fixture COG, and the guarded tile service. ADR 0006. `/imagery/*` now uses the session and membership check from this slice. `x-workspace-id` still names the workspace.
+- Migration `0002_auth_workspaces.sql` adds `app_user`, `workspace`, `role`, `session`, `account`, `verification`, `member`, and `invitation`. The six system roles and their permission tokens are seeded. ADR 0007. Better Auth's organization is the workspace. A separate `groundwork_auth` role serves sign-up and sessions. `groundwork_app` cannot assume it.
+- Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
+- Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
+- Tenant routes, including imagery, return 404 when the session is not an active member. `GET /catalog-items` is a fixture: roles with `catalog.manage` see `unit_cost_cents`, and other roles do not.
+- The office app has sign-up, sign-in, create workspace, a switcher, settings, members, and the role list. Playwright covers the keyboard sign-up path.
+- CI `check` runs lint, typecheck, unit tests, the Python guard tests, and build. The `db` job migrates and runs RLS and auth tests. The `imagery` job renders the fixture tile with a real session. An `e2e` job runs Playwright.
 
 ## Not in this slice
 
-- Auth, the Better Auth table mapping, and the `workspace` table. Infra rows store `workspace_id` with no foreign key.
-- Product modules, imagery ingest, the fixture COG, and the TiTiler `allows_tracing` / `verified_at` gate.
-- A mailer. Mailpit is only the local SMTP catcher.
+- `locationId` resolution. The location table is spec 03.
+- County ingest, the ingest API, takeoff drawing, and proposal PDF attribution.
+- A persisted catalog. `GET /catalog-items` is the cost-visibility fixture.
+- Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
+- A browser-facing signed tile URL. Imagery still proxies.
 - Sentry. Choosing a license. Choosing between Fly and Render.
 - The remaining gaps in `docs/specs/OPEN-QUESTIONS.md`.
-- Sign-ups or spend. No hosted secrets in git. Local compose passwords are laptop defaults and are refused when `NODE_ENV=production`.
+- Sign-ups or spend. No hosted secrets in git. Local compose passwords, the tile signing secret, and the local Better Auth secret are laptop defaults and are refused when `NODE_ENV=production`.
 
 ## Open questions
 

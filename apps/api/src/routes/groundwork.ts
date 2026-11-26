@@ -17,8 +17,7 @@ import {
   type MemberStatus,
   type SystemRoleName,
 } from "@groundwork/shared";
-import { fromNodeHeaders } from "better-auth/node";
-import type { FastifyBaseLogger, FastifyInstance, FastifyRequest, RawServerDefault } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance, RawServerDefault } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { Kysely, Selectable, Transaction } from "kysely";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -26,6 +25,7 @@ import type pg from "pg";
 import { z } from "zod/v4";
 
 import type { Auth } from "../auth/auth.js";
+import { requireActiveMember, requireSession, type MemberRow } from "../auth/guard.js";
 import type { Mailer } from "../auth/mail.js";
 import { readWebOrigin } from "../config.js";
 import type { Database } from "../db/types.js";
@@ -40,7 +40,6 @@ type ApiApp = FastifyInstance<
   FastifyBaseLogger,
   ZodTypeProvider
 >;
-type MemberRow = Selectable<Database["member"]>;
 type WorkspaceRow = Selectable<Database["workspace"]>;
 
 export type GroundworkContext = {
@@ -48,13 +47,6 @@ export type GroundworkContext = {
   authPool: pg.Pool;
   auth: Auth;
   mailer: Mailer;
-};
-
-type SessionUser = {
-  id: string;
-  email: string;
-  sessionId: string;
-  activeWorkspaceId: string | null;
 };
 
 const TIME_ZONES = new Set(Intl.supportedValuesOf("timeZone"));
@@ -201,28 +193,6 @@ function asAddress(value: unknown): z.infer<typeof addressSchema> | null {
   return parsed.success ? parsed.data : null;
 }
 
-async function requireSession(
-  ctx: GroundworkContext,
-  headers: FastifyRequest["headers"],
-): Promise<SessionUser> {
-  const result = await ctx.auth.api.getSession({
-    headers: fromNodeHeaders(headers),
-  });
-  if (!result?.user?.id || !result.session?.id) {
-    throw new ProblemError({
-      status: 401,
-      title: "Unauthorized",
-      detail: "Sign in to continue.",
-    });
-  }
-  return {
-    id: result.user.id,
-    email: result.user.email,
-    sessionId: result.session.id,
-    activeWorkspaceId: result.session.activeOrganizationId ?? null,
-  };
-}
-
 async function permissionsOf(db: AppDb, roleId: string): Promise<string[]> {
   const role = await db
     .selectFrom("role")
@@ -230,32 +200,6 @@ async function permissionsOf(db: AppDb, roleId: string): Promise<string[]> {
     .where("id", "=", roleId)
     .executeTakeFirst();
   return role?.permissions ?? [];
-}
-
-async function requireActiveMember(
-  ctx: GroundworkContext,
-  userId: string,
-  workspaceId: string,
-): Promise<MemberRow> {
-  const rows = await withDbContext(ctx.db, { userId }, async (trx) => {
-    return trx.selectFrom("member").selectAll().where("user_id", "=", userId).execute();
-  });
-  const member = rows.find((row) => row.workspace_id === workspaceId && row.status !== "revoked");
-  if (!member) {
-    throw notFound("That workspace was not found.");
-  }
-  if (member.status === "disabled") {
-    await ctx.authPool.query("delete from session where user_id = $1", [userId]);
-    throw new ProblemError({
-      status: 401,
-      title: "Unauthorized",
-      detail: "This membership is disabled.",
-    });
-  }
-  if (member.status !== "active") {
-    throw notFound("That workspace was not found.");
-  }
-  return member;
 }
 
 async function requirePermission(
@@ -349,7 +293,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const user = await withDbContext(ctx.db, { userId: session.id }, async (trx) => {
         return trx
           .selectFrom("app_user")
@@ -424,7 +368,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      await requireSession(ctx, request.headers);
+      await requireSession(ctx.auth, request.headers);
       const roles = await ctx.db
         .selectFrom("role")
         .select(["id", "name", "permissions", "is_system"])
@@ -462,7 +406,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const header = request.headers["x-workspace-id"];
       if (typeof header !== "string") {
         throw new ProblemError({
@@ -494,7 +438,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request, reply) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const name = request.body.name;
       const timezone = timezoneOrDefault(request.body.timezone);
       const currency = (request.body.currency ?? "USD").toUpperCase();
@@ -503,7 +447,9 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       let created: WorkspaceRow | undefined;
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const id = createId();
-        const slug = attempt === 0 ? base : `${base}-${id.slice(0, 8)}`;
+        // UUIDv7's first 8 hex digits are the timestamp and stay the same for
+        // about a minute, so a colliding slug takes its random tail instead.
+        const slug = attempt === 0 ? base : `${base}-${id.slice(-12)}`;
         try {
           created = await withDbContext(
             ctx.db,
@@ -596,7 +542,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const workspaceId = parseWorkspaceId(request.params.id);
       await requireActiveMember(ctx, session.id, workspaceId);
       await ctx.authPool.query(
@@ -617,7 +563,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const workspaceId = parseWorkspaceId(request.params.id);
       await requireActiveMember(ctx, session.id, workspaceId);
       const row = await withDbContext(ctx.db, { workspaceId, userId: session.id }, async (trx) => {
@@ -654,7 +600,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const workspaceId = parseWorkspaceId(request.params.id);
       const actor = await requireActiveMember(ctx, session.id, workspaceId);
       await requirePermission(ctx.db, actor, "workspace.manage");
@@ -715,7 +661,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const workspaceId = parseWorkspaceId(request.params.id);
       await requireActiveMember(ctx, session.id, workspaceId);
       const members = await withDbContext(
@@ -780,7 +726,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request, reply) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       const workspaceId = parseWorkspaceId(request.params.id);
       const actor = await requireActiveMember(ctx, session.id, workspaceId);
       await requirePermission(ctx.db, actor, "members.manage");
@@ -951,7 +897,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       if (!isUuidV7(request.params.token)) {
         throw notFound("That invite was not found.");
       }
@@ -1033,7 +979,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
       },
     },
     async (request) => {
-      const session = await requireSession(ctx, request.headers);
+      const session = await requireSession(ctx.auth, request.headers);
       if (!isUuidV7(request.params.id)) {
         throw notFound("That member was not found.");
       }

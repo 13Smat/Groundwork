@@ -36,6 +36,6 @@ test("an owner can invite a member from the members page", async ({ page }) => {
   await page.getByLabel("Email").fill(invite);
   await page.getByLabel("Role").selectOption({ label: "crew" });
   await page.getByRole("button", { name: "Send invite" }).click();
-  await expect(page.getByRole("cell", { name: invite })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "invited" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: invite, exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "invited", exact: true })).toBeVisible();
 });

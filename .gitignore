@@ -10,6 +10,10 @@ node_modules/
 *.pem
 *.key
 
+# Python
+__pycache__/
+*.pyc
+
 # Build output
 dist/
 build/
@@ -17,6 +21,11 @@ build/
 .vite/
 coverage/
 out/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
 
 # OS
 .DS_Store

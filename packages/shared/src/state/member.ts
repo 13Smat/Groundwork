@@ -45,7 +45,7 @@ export function isMemberStatus(value: string): value is MemberStatus {
 /**
  * Spec 02: invited -> active, active -> disabled, disabled -> active,
  * invited -> revoked. Anything else is illegal. The API maps that to 409.
- * Revoked keeps the row. The spec's "(deleted)" wording is recorded in ADR 0006.
+ * Revoked keeps the row. The spec's "(deleted)" wording is recorded in ADR 0007.
  */
 export function transitionMember(from: MemberStatus, to: MemberStatus): MemberStatus {
   if (from === to) {

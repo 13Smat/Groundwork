@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-26).
+Accepted (2026-11-26). The unguarded TiTiler placeholder in compose is superseded by [ADR 0006](0006-imagery-registry-and-tiles.md).
 
 ## Context
 

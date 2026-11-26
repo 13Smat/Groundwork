@@ -1,7 +1,7 @@
 /**
  * System-role permission tokens. The matrix in spec 02 uses checkmarks plus
  * qualifiers ("read", "read assigned", "read own", "crew only") that are not
- * a vocabulary. ADR 0006 records the tokens below. A later ticket must use
+ * a vocabulary. ADR 0007 records the tokens below. A later ticket must use
  * these strings; do not invent a second encoding.
  */
 export const PERMISSIONS = [

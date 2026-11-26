@@ -21,7 +21,7 @@ const LOCAL_ORIGINS = [
 ];
 
 /**
- * Better Auth's organization is a Groundwork workspace (ADR 0002, ADR 0006).
+ * Better Auth's organization is a Groundwork workspace (ADR 0002, ADR 0007).
  * Column names are snake_case. Ids are UUIDv7 strings. The pool must be
  * groundwork_auth: its policies allow identity lookups, and groundwork_app's
  * do not.

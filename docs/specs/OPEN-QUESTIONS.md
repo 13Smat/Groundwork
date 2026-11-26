@@ -22,19 +22,43 @@ Foundations 2 ([ADR 0005](../adr/0005-local-infra-and-rls.md)) applies this expr
 workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid
 ```
 
-The imagery tables are not in that migration. The policy for a null `workspace_id` is still not written.
+The imagery tables are not in that migration. ADR 0005 did not write the null `workspace_id` policy. ADR 0006 does.
+
+Migration `0003_imagery.sql` ([ADR 0006](../adr/0006-imagery-registry-and-tiles.md)) applies this read policy on `imagery_source` and `imagery_capture`:
+
+```sql
+workspace_id is null
+or workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid
+```
+
+Insert, update, and delete use a different policy: `workspace_id` must be non-null and equal to the same setting. `groundwork_app` cannot write a global row. The migration role writes the seeded global rows. The spec files were not edited.
 
 ## Mapping the Better Auth tables to the 01 `app_user` / `member` / `role` tables; the `citext` extension
 
 ADR 0002 chooses Better Auth with the organizations plugin. `docs/specs/01-data-model.md` sketches `app_user`, `member`, and `role`, with `citext` on emails. The SQL sketch enables `postgis` and `pgcrypto` and does not enable `citext`. Which tables Better Auth owns, and which tables Groundwork owns, are unspecified.
 
-The foundations migration creates the `citext` extension ([ADR 0005](../adr/0005-local-infra-and-rls.md)). No table in that migration uses the type. The mapping is still open.
+The foundations migration creates the `citext` extension ([ADR 0005](../adr/0005-local-infra-and-rls.md)). No table in that migration uses the type.
+
+[ADR 0007](../adr/0007-auth-workspaces.md) uses one set of tables. Better Auth's `user` is `app_user`, its organization is `workspace`, and `member` and `invitation` keep those names. Groundwork owns `role`. Email columns are `citext`. Primary keys Better Auth compares are `text` storing a UUIDv7, because the adapter binds text. The spec files were not edited.
+
+These choices are still gaps in the specs:
+
+- The permission matrix uses words ("read", "read assigned", "read own", "crew only") and not a token list. ADR 0007 stores `takeoff.read`, `estimate.read`, `proposal.read`, `crm.read.assigned`, `jobs.read.assigned`, `schedule.read`, `schedule.read.own`, and `time.approve.crew`. A later ticket must use those strings.
+- Spec 02 says revoke goes to "(deleted)". The row stays, with status `revoked`. Invitation status `canceled` follows Better Auth's spelling.
+- `GET /catalog-items` returns one fixture row so the cost-visibility check can run. Persisted catalog items are spec 06. The fixture is not a catalog API.
+- Workspace logo is a URL string. File upload is not specified.
+- `workspace.plan` exists and the API does not set it. Billing is still the open question above.
+- The route table has no way to record the active workspace. `POST /workspaces/:id/activate` does that.
+- Better Auth's organization plugin defaults `membershipLimit` to 100. Our routes do not enforce that number.
+- Disabling a member deletes every session for that user, including a session used for a different workspace. The other memberships stay. The person signs in again.
+- System roles have a null `workspace_id` so they can be read with no tenant setting. That is separate from the imagery null-workspace policy.
+- `0003_imagery.sql` has no foreign key to `workspace`. That table did not exist when imagery shipped. Tenant imagery rows stay isolated by the imagery policy.
 
 ## Tables missing from 01
 
 `docs/specs/00-architecture.md` says human numbers (`J-1001` and the rest) come from a `counters` table. The entity list and the SQL sketch in `docs/specs/01-data-model.md` have no `counters` table.
 
-The foundations migration adds `counters` with `workspace_id`, a `prefix` constrained to `J`, `E`, `P`, and `INV`, and `last_value bigint not null` ([ADR 0005](../adr/0005-local-infra-and-rls.md)). There is no default and no seed. The sequence start (the `1001` examples) is still unspecified. There is no foreign key to `workspace`, because that table is not created in this slice.
+The foundations migration adds `counters` with `workspace_id`, a `prefix` constrained to `J`, `E`, `P`, and `INV`, and `last_value bigint not null` ([ADR 0005](../adr/0005-local-infra-and-rls.md)). There is no default and no seed. The sequence start (the `1001` examples) is still unspecified. `workspace` now exists ([ADR 0007](../adr/0007-auth-workspaces.md)). `counters`, `file`, `audit_log`, and `usage_event` still have no foreign key to it.
 
 The entity list names `File`. The SQL sketch has no `file` table.
 
@@ -81,3 +105,17 @@ Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nv
 `docs/specs/04-map-takeoff-manual.md` forbids Google Maps Platform and Mapbox satellite as a measurement or AI input, and says a non-measurement context basemap is "OK only ... with attribution, if at all." Which basemap, if any, is not chosen.
 
 `GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed.
+
+## `locationId` on `GET /imagery/captures` before the location table exists
+
+Spec 04 accepts `locationId` or `bbox`. Spec 03 owns `location`, and that table is not migrated. [ADR 0006](../adr/0006-imagery-registry-and-tiles.md) accepts the parameter and returns 501 until a lookup is plugged in. `bbox` is the spatial query this slice implements.
+
+## Age-warning day counts, tile signature lifetime, and who calls TiTiler
+
+Spec 04 says to warn when a capture is older than 12 months, and to warn more strongly as it approaches 4 years. It does not give a day count for the second warning. The captures route uses 365 days and 1095 days. Both are provisional.
+
+The same spec says the API issues short-lived signed tile URLs. It does not say the lifetime, or whether the browser calls TiTiler. This slice proxies. The HMAC lives for 60 seconds and is not given to the browser. `usage_event.cost_estimate_cents` for `imagery_tile` is 0. How a usage row becomes an invoice is already an open question above.
+
+## Blocked imagery products are not in the provider check
+
+The spec 01 sketch limits `provider` to `nc_ortho`, `nc_helene_2025`, `naip`, `county`, `nearmap`, `vexcel`, `drone_upload`, and `other`. The blocked rows `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` are stored as `other`. The `name` column is the registry key. The sketch has no separate slug.

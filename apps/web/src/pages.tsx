@@ -410,7 +410,8 @@ export function MembersPage() {
   async function onInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api(`/workspaces/${workspaceId}/invites`, {
         method: "POST",
@@ -419,7 +420,7 @@ export function MembersPage() {
           roleId: String(form.get("roleId") ?? ""),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       await refresh();
     } catch (err) {
       setError(message(err, "Could not send the invite."));

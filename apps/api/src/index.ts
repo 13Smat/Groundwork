@@ -9,6 +9,7 @@ import {
   readHost,
   readObjectStorageConfig,
   readPort,
+  readTitilerUrl,
   redactDatabaseUrl,
 } from "./config.js";
 import { createLogger } from "./logging.js";
@@ -19,7 +20,8 @@ const telemetry = startTelemetry();
 const logger = createLogger("api");
 
 const { buildApp } = await import("./app.js");
-const { createPool } = await import("./db/client.js");
+const { createDb, createPool } = await import("./db/client.js");
+const { checkTitiler } = await import("./imagery/proxy.js");
 const { checkObjectStorage } = await import("./storage/s3.js");
 
 const databaseUrl = readAppDatabaseUrl();
@@ -58,10 +60,13 @@ try {
   const storage = readObjectStorageConfig();
   await checkObjectStorage(storage);
   logger.info({ endpoint: storage.endpoint, bucket: storage.bucket }, "object storage ready");
+  const titiler = readTitilerUrl();
+  await checkTitiler(titiler);
+  logger.info({ origin: titiler.origin }, "tile service ready");
 } catch (error) {
   logger.error(
     { err: error, database: redactDatabaseUrl(databaseUrl) },
-    "startup check failed. Start Postgres and MinIO with docker compose, then run pnpm db:migrate.",
+    "startup check failed. Start Postgres, MinIO, and TiTiler with docker compose, then run pnpm db:migrate.",
   );
   await authPool.end();
   await pool.end();
@@ -69,7 +74,11 @@ try {
   process.exit(1);
 }
 
-const app = await buildApp({ logger, database: { app: pool, auth: authPool } });
+const app = await buildApp({
+  logger,
+  database: { app: pool, auth: authPool },
+  imagery: { db: createDb(pool) },
+});
 const port = readPort(process.env.PORT);
 const host = readHost(process.env.HOST);
 await app.listen({ port, host });
