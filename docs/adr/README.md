@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0017. ADR 0015 is reserved for estimating and ADR 0016 for AI assist. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The CRM UI shipped without a new ADR.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0017. ADR 0015 is reserved for estimating. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. AI takeoff assist is 0016. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |
@@ -18,3 +18,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0011](0011-starter-pack.md) | Clean-room catalog starter pack |
 | [0013](0013-takeoff-measurements.md) | Takeoff measurements and geodesic quantities |
 | [0014](0014-takeoff-editor.md) | Takeoff editor |
+| [0016](0016-ai-takeoff-assist.md) | AI takeoff assist, the CV contract, and the mock adapter |

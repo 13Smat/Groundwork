@@ -24,6 +24,8 @@ const TENANT_TABLES = [
   "job_file",
   "takeoff",
   "measurement",
+  "detection_run",
+  "detection_feature",
 ] as const;
 const AUTH_TABLES = [
   "app_user",
@@ -645,6 +647,59 @@ describe("imagery row level security", () => {
     expect(notes.rows[0]?.notes).not.toBe("admin-probe");
   });
 
+  it("rejects an illegal detection run transition and keeps the function invoker-secure", async () => {
+    const fn = await requireAdmin().query<{ prosecdef: boolean }>(
+      "select prosecdef from pg_proc where proname = 'detection_run_before_update'",
+    );
+    expect(fn.rows[0]?.prosecdef).toBe(false);
+    for (const table of ["detection_run", "detection_feature"]) {
+      const priv = await requireAdmin().query<{ app: boolean; auth: boolean }>(
+        `select has_table_privilege('groundwork_app', $1, 'select') as app,
+                has_table_privilege('groundwork_auth', $1, 'select') as auth`,
+        [`public.${table}`],
+      );
+      expect(priv.rows[0]?.app).toBe(true);
+      expect(priv.rows[0]?.auth).toBe(false);
+    }
+    const policy = await requireAdmin().query<{ qual: string; with_check: string }>(
+      "select qual, with_check from pg_policies where tablename = 'detection_run'",
+    );
+    expect(policy.rows[0]?.qual.toLowerCase()).toContain("nullif");
+    expect(policy.rows[0]?.qual).toContain("app.workspace_id");
+    expect(policy.rows[0]?.with_check.toLowerCase()).toContain("nullif");
+
+    const client = await requireAdmin().connect();
+    try {
+      await client.query("begin");
+      const workspace = createId();
+      const job = createId();
+      const takeoff = createId();
+      const run = createId();
+      await client.query(
+        `insert into job (id, workspace_id, number, name, stage)
+         values ($1, $2, 'J-1', 'A', 'lead')`,
+        [job, workspace],
+      );
+      await client.query(
+        `insert into takeoff (id, workspace_id, job_id, lineage_id, kind, status)
+         values ($1, $2, $3, $1, 'planset', 'draft')`,
+        [takeoff, workspace, job],
+      );
+      await client.query(
+        `insert into detection_run (
+           id, workspace_id, takeoff_id, mode, status, idempotency_key, request_hash
+         ) values ($1, $2, $3, 'assist', 'queued', $4, repeat('c', 64))`,
+        [run, workspace, takeoff, run],
+      );
+      await expect(
+        client.query("update detection_run set status = 'succeeded' where id = $1", [run]),
+      ).rejects.toThrow(/illegal detection run transition from queued to succeeded/);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+  });
+
   it("rejects a ready capture moving to failed", async () => {
     const client = await requireAdmin().connect();
     try {
@@ -685,6 +740,8 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     job_file: { a: createId(), b: createId() },
     takeoff: { a: createId(), b: createId() },
     measurement: { a: createId(), b: createId() },
+    detection_run: { a: createId(), b: createId() },
+    detection_feature: { a: createId(), b: createId() },
   };
   const takeoffItem = { a: createId(), b: createId() };
   const pool = requireAdmin();
@@ -809,6 +866,37 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
       workspaceB,
       ids.takeoff.b,
       takeoffItem.b,
+    ],
+  );
+  await pool.query(
+    `insert into detection_run (
+       id, workspace_id, takeoff_id, mode, status, idempotency_key, request_hash
+     ) values
+       ($1, $2, $3, 'assist', 'queued', $4, repeat('a', 64)),
+       ($5, $6, $7, 'assist', 'queued', $8, repeat('b', 64))`,
+    [
+      ids.detection_run.a,
+      workspaceA,
+      ids.takeoff.a,
+      ids.detection_run.a,
+      ids.detection_run.b,
+      workspaceB,
+      ids.takeoff.b,
+      ids.detection_run.b,
+    ],
+  );
+  await pool.query(
+    `insert into detection_feature (id, workspace_id, run_id, geom)
+     values
+       ($1, $2, $3, ST_SetSRID(ST_GeomFromText('POLYGON((0 0, 0.001 0, 0.001 0.001, 0 0.001, 0 0))'), 4326)),
+       ($4, $5, $6, ST_SetSRID(ST_GeomFromText('POLYGON((1 1, 1.001 1, 1.001 1.001, 1 1.001, 1 1))'), 4326))`,
+    [
+      ids.detection_feature.a,
+      workspaceA,
+      ids.detection_run.a,
+      ids.detection_feature.b,
+      workspaceB,
+      ids.detection_run.b,
     ],
   );
   return ids;

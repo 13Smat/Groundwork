@@ -5,6 +5,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  type GetObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { isUuidV7 } from "@groundwork/shared";
@@ -153,6 +154,43 @@ export async function putObject(
       ContentType: input.mime,
     }),
   );
+}
+
+/** This slice downloads a capture before cropping it. Larger objects wait for a windowed read. */
+export const MAX_COG_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+
+export async function getObject(
+  storageKey: string,
+  config: ObjectStorageConfig = readObjectStorageConfig(),
+): Promise<Buffer> {
+  assertStorageKey(storageKey);
+  const client = createS3Client(config);
+  let response: GetObjectCommandOutput;
+  try {
+    response = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: storageKey }));
+  } catch {
+    throw new ProblemError({
+      status: 409,
+      title: "Conflict",
+      detail: "That imagery capture has no readable COG.",
+    });
+  }
+  if (response.ContentLength !== undefined && response.ContentLength > MAX_COG_DOWNLOAD_BYTES) {
+    throw new ProblemError({
+      status: 409,
+      title: "Conflict",
+      detail: "That capture is too large to crop in one chip.",
+    });
+  }
+  const bytes = await response.Body?.transformToByteArray();
+  if (!bytes || bytes.byteLength === 0 || bytes.byteLength > MAX_COG_DOWNLOAD_BYTES) {
+    throw new ProblemError({
+      status: 409,
+      title: "Conflict",
+      detail: "That imagery capture has no readable COG.",
+    });
+  }
+  return Buffer.from(bytes);
 }
 
 export async function objectExists(

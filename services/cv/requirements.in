@@ -1,0 +1,6 @@
+# Direct pins are produced by pip-compile into requirements.txt.
+# The mock service does not depend on torch, SAM 2, or rasterio.
+fastapi
+uvicorn
+httpx
+pytest
