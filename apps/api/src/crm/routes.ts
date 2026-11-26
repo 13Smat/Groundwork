@@ -20,7 +20,7 @@ import { workspaceIdFromHeader } from "../auth/hook.js";
 import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
-import { presignUpload, workspaceStorageKey } from "../storage/s3.js";
+import { presignDownload, presignUpload, workspaceStorageKey } from "../storage/s3.js";
 import { crmAccess, jobAccess, type JobAccess, type RecordAccess } from "./access.js";
 import {
   activeMember,
@@ -41,6 +41,7 @@ import {
   insertTask,
   listClients,
   listContacts,
+  listJobActivity,
   listJobFiles,
   listJobs,
   listLocations,
@@ -181,6 +182,7 @@ const fileResponse = z.object({
   status: z.string(),
   storage_key: z.string(),
   created_at: z.string(),
+  download_url: z.string(),
 });
 
 const idParams = z.object({ id: z.uuidv7() });
@@ -1315,7 +1317,7 @@ export async function registerCrmRoutes(
         }
         return listJobFiles(trx, job.id);
       });
-      return { files: files.map(presentFile) };
+      return { files: await Promise.all(files.map((file) => withDownload(file))) };
     },
   );
 
@@ -1361,10 +1363,11 @@ export async function registerCrmRoutes(
           bytes: request.body.bytes ?? null,
         });
         const upload = await presignUpload({ storageKey, mime: request.body.mime });
-        return { file, upload };
+        const download = await presignDownload({ storageKey });
+        return { file, upload, downloadUrl: download.url };
       });
       return reply.status(201).send({
-        file: presentFile(saved.file),
+        file: { ...presentFile(saved.file), download_url: saved.downloadUrl },
         upload: {
           url: saved.upload.url,
           method: saved.upload.method,
@@ -1372,6 +1375,55 @@ export async function registerCrmRoutes(
           expires_in_seconds: saved.upload.expiresInSeconds,
         },
       });
+    },
+  );
+
+  routes.get(
+    "/jobs/:id/activity",
+    {
+      schema: {
+        ...tenant,
+        params: idParams,
+        response: {
+          200: z.object({
+            events: z.array(
+              z.object({
+                id: z.string(),
+                actor_member_id: z.string().nullable(),
+                action: z.string().nullable(),
+                at: z.string().nullable(),
+                diff: z
+                  .object({
+                    from: z.string().nullable(),
+                    to: z.string().nullable(),
+                    reason: z.string().nullable(),
+                    forced: z.boolean(),
+                  })
+                  .nullable(),
+              }),
+            ),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      const tenant = await requireTenant(request, "jobs", "read");
+      const events = await withWorkspaceContext(options.db, tenant.workspaceId, async (trx) => {
+        const job = await getJob(trx, request.params.id, assignedFor(tenant, "jobs"));
+        if (!job) {
+          throw notFound("That job was not found.");
+        }
+        return listJobActivity(trx, job.id);
+      });
+      return {
+        events: events.map((event) => ({
+          id: event.id,
+          actor_member_id: event.actor_member_id,
+          action: event.action,
+          at: event.at ? iso(event.at) : null,
+          diff: presentDiff(event.diff),
+        })),
+      };
     },
   );
 
@@ -1456,6 +1508,29 @@ export async function registerCrmRoutes(
       return { stages };
     },
   );
+}
+
+function presentDiff(value: unknown): {
+  from: string | null;
+  to: string | null;
+  reason: string | null;
+  forced: boolean;
+} | null {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  return {
+    from: typeof row.from === "string" ? row.from : null,
+    to: typeof row.to === "string" ? row.to : null,
+    reason: typeof row.reason === "string" ? row.reason : null,
+    forced: row.forced === true,
+  };
+}
+
+async function withDownload(row: Parameters<typeof presentFile>[0]) {
+  const download = await presignDownload({ storageKey: row.storage_key });
+  return { ...presentFile(row), download_url: download.url };
 }
 
 function presentFile(row: {

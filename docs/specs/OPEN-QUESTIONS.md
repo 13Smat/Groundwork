@@ -163,3 +163,7 @@ Spec 03's examples use `J-1001`. The start value for `E`, `P`, and `INV` was sti
 ## Note, task, and file shapes, and an ungeocodable resolve
 
 Spec 03 names notes, tasks, and files on a job and does not give columns. ADR 0009 stores a note body, a task title with `done` and `due_at`, and a `job_file` row pointing at `file`. `POST /locations/resolve` is not given a status for an address the geocoder cannot place. This slice returns 200 with `point: null`, an empty parcel list, and a warning. List routes cap at 200 rows. `GET /jobs` defaults to 50 and caps at 200. Paging is not in the spec.
+
+## Activity list and file download URL
+
+Spec 03's job page includes an Activity tab and Files/Photos. The API table does not name a read for `audit_log` or a way for the browser to GET a stored object. This UI reads `GET /jobs/:id/activity` (actor, action, `at`, and the stage diff already written by ADR 0009) and adds `download_url` on the file payload, signed the same way as the upload URL. The presign lifetime is still the open question above. The spec files were not edited.

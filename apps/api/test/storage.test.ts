@@ -5,6 +5,7 @@ import { LOCAL_S3_ACCESS_KEY_ID, LOCAL_S3_SECRET_ACCESS_KEY } from "../src/confi
 import { ProblemError } from "../src/errors.js";
 import {
   DEFAULT_UPLOAD_EXPIRES_SECONDS,
+  presignDownload,
   presignUpload,
   workspaceStorageKey,
 } from "../src/storage/s3.js";
@@ -32,6 +33,17 @@ describe("presigned upload", () => {
     expect(signed.url).toContain("X-Amz-Algorithm");
     expect(signed.url).toContain(`X-Amz-Expires=${DEFAULT_UPLOAD_EXPIRES_SECONDS}`);
     expect(decodeURIComponent(signed.url)).toContain(storageKey);
+  });
+
+  it("builds a GET URL for the same key", async () => {
+    const workspaceId = createId();
+    const fileId = createId();
+    const storageKey = workspaceStorageKey(workspaceId, fileId);
+    const signed = await presignDownload({ storageKey }, storage);
+    expect(signed.method).toBe("GET");
+    expect(signed.expiresInSeconds).toBe(DEFAULT_UPLOAD_EXPIRES_SECONDS);
+    expect(decodeURIComponent(signed.url)).toContain(storageKey);
+    expect(signed.url).toContain("X-Amz-Algorithm");
   });
 
   it("rejects a key that leaves the bucket prefix", async () => {
