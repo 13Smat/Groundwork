@@ -21,10 +21,15 @@ const STYLE = `
   footer { margin-top: 18pt; font-size: 10pt; }
 `;
 
+/** Blocks scripts, remote images, and remote fonts. Inline styles and data images stay. */
+export const PROPOSAL_CSP =
+  "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:";
+
 /** Static HTML for Playwright. No external requests and no clock. */
 export function renderProposalHtml(model: ProposalPdfModel): string {
   const body = renderToStaticMarkup(<ProposalDocument model={model} />);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Proposal ${escapeText(model.number)}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
+  const title = escapeText(model.number);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PROPOSAL_CSP}"><title>Proposal ${title}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
 }
 
 function escapeText(value: string): string {

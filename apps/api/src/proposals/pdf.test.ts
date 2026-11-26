@@ -15,7 +15,7 @@ GlobalWorkerOptions.workerSrc = pathToFileURL(
   require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
 ).href;
 
-import { closeProposalBrowser, renderProposalPdf } from "./pdf.js";
+import { blockedProposalRequests, closeProposalBrowser, renderProposalPdf } from "./pdf.js";
 import { renderSiteMap } from "../takeoff/site-map.js";
 
 const COST_TEXT = "$1,234.56";
@@ -123,5 +123,47 @@ describe("proposal pdf", () => {
     expect(firstText).not.toContain(COST_TEXT);
     expect(firstText.toLowerCase()).not.toContain("margin");
     expect(firstText.toLowerCase()).not.toContain("unit cost");
+    expect(blockedProposalRequests()).toBe(0);
+  }, 30_000);
+
+  it("prints tenant markup as text and makes no network request", async () => {
+    const image = '<img src="http://169.254.169.254/">';
+    const script = "<script>alert(1)</script>";
+    const css = "body{background:url(http://169.254.169.254/latest)}";
+    const file = "file:///etc/passwd";
+    const html = renderProposalHtml({
+      ...model(),
+      intro: image,
+      scopeNote: script,
+      terms: css,
+      lines: [
+        {
+          ...model().lines[0]!,
+          description: file,
+        },
+      ],
+      includeSiteMap: false,
+      siteMapPngBase64: null,
+    });
+    expect(html).toContain("&lt;img src=&quot;http://169.254.169.254/&quot;&gt;");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain(image);
+    const bytes = await renderProposalPdf(html);
+    expect(blockedProposalRequests()).toBe(0);
+    const text = await pdfText(bytes);
+    expect(text).toContain(image);
+    expect(text).toContain("<script>");
+    expect(text).toContain("url(http://169.254.169.254/latest)");
+    expect(text).toContain(file);
+    expect(text).not.toContain("root:x:0:0");
+  }, 30_000);
+
+  it("aborts an unescaped remote image and a file URL", async () => {
+    const html = `<!doctype html><html><body><img src="http://169.254.169.254/"><img src="file:///etc/passwd"><p>kept</p></body></html>`;
+    const bytes = await renderProposalPdf(html);
+    expect(blockedProposalRequests()).toBe(2);
+    const text = await pdfText(bytes);
+    expect(text).toContain("kept");
+    expect(text).not.toContain("root:x:0:0");
   }, 30_000);
 });

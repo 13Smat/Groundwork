@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { FIELD_VERIFY_NOTE, renderProposalHtml, type ProposalPdfModel } from "./index.js";
+import {
+  FIELD_VERIFY_NOTE,
+  PROPOSAL_CSP,
+  renderProposalHtml,
+  type ProposalPdfModel,
+} from "./index.js";
 
 const COST_TEXT = "$1,234.56";
 
@@ -60,6 +65,7 @@ function model(): ProposalPdfModel {
 describe("proposal html", () => {
   it("prints imagery credits and the field-verify note, and hides cost", () => {
     const html = renderProposalHtml(model());
+    expect(html).toContain(PROPOSAL_CSP);
     expect(html).toContain("nc_ortho");
     expect(html).toContain("Burke 2024");
     expect(html).toContain("2024-02-11");
