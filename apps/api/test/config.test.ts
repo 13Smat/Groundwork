@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  LOCAL_BETTER_AUTH_SECRET,
   LOCAL_DATABASE_URL,
   readAppDatabaseUrl,
+  readAuthDatabaseUrl,
+  readBetterAuthSecret,
   readDatabaseUrl,
+  readGoogleOAuth,
   readObjectStorageConfig,
   readPort,
   redactDatabaseUrl,
@@ -13,6 +17,11 @@ const touched = [
   "NODE_ENV",
   "DATABASE_URL",
   "APP_DATABASE_URL",
+  "AUTH_DATABASE_URL",
+  "APP_DB_PASSWORD",
+  "BETTER_AUTH_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
   "S3_ENDPOINT",
   "S3_BUCKET",
 ] as const;
@@ -75,6 +84,31 @@ describe("config", () => {
     expect(readPort(undefined)).toBe(3001);
     expect(readPort("")).toBe(3001);
     expect(() => readPort("0")).toThrow(/PORT/);
+  });
+
+  it("uses the local auth defaults and refuses them in production", () => {
+    setEnv({
+      NODE_ENV: "development",
+      AUTH_DATABASE_URL: undefined,
+      BETTER_AUTH_SECRET: undefined,
+      APP_DB_PASSWORD: undefined,
+    });
+    expect(readAuthDatabaseUrl()).toContain("groundwork_auth");
+    expect(readBetterAuthSecret()).toBe(LOCAL_BETTER_AUTH_SECRET);
+
+    setEnv({ NODE_ENV: "production", AUTH_DATABASE_URL: undefined, BETTER_AUTH_SECRET: undefined });
+    expect(() => readAuthDatabaseUrl()).toThrow(/AUTH_DATABASE_URL is required/);
+    expect(() => readBetterAuthSecret()).toThrow(/BETTER_AUTH_SECRET is required/);
+
+    setEnv({ NODE_ENV: "production", BETTER_AUTH_SECRET: LOCAL_BETTER_AUTH_SECRET });
+    expect(() => readBetterAuthSecret()).toThrow(/local default/);
+  });
+
+  it("requires both Google OAuth values", () => {
+    setEnv({ GOOGLE_CLIENT_ID: undefined, GOOGLE_CLIENT_SECRET: undefined });
+    expect(readGoogleOAuth()).toBeUndefined();
+    setEnv({ GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: undefined });
+    expect(() => readGoogleOAuth()).toThrow(/GOOGLE_CLIENT_ID/);
   });
 
   it("requires object storage settings in production", () => {

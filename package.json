@@ -13,6 +13,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run build --filter=@groundwork/shared && vitest run",
     "test:rls": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.rls.config.ts",
+    "test:auth": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.auth.config.ts",
+    "test:e2e": "turbo run build --filter=@groundwork/shared && playwright test",
     "build": "turbo run build",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:migrate": "pnpm --filter @groundwork/api db:migrate",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.57.0",
     "@types/node": "^24.19.4",
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",

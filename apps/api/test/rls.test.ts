@@ -3,7 +3,7 @@ import type { Kysely } from "kysely";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { readAppDatabaseUrl, readDatabaseUrl } from "../src/config.js";
+import { readAppDatabaseUrl, readAuthDatabaseUrl, readDatabaseUrl } from "../src/config.js";
 import { createDb, createPool } from "../src/db/client.js";
 import { migrate } from "../src/db/migrate.js";
 import type { Database } from "../src/db/types.js";
@@ -11,6 +11,16 @@ import { TenantRoleError, withWorkspaceContext } from "../src/db/workspace.js";
 import { startQueue } from "../src/queue.js";
 
 const TENANT_TABLES = ["counters", "file", "audit_log", "usage_event"] as const;
+const AUTH_TABLES = [
+  "app_user",
+  "session",
+  "account",
+  "verification",
+  "workspace",
+  "member",
+  "invitation",
+  "role",
+] as const;
 type TenantTable = (typeof TENANT_TABLES)[number];
 
 let admin: pg.Pool | undefined;
@@ -209,20 +219,131 @@ describe("row level security", () => {
     await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   });
 
+  it("forces row security on the auth tables", async () => {
+    const result = await requireAdmin().query<{
+      relname: string;
+      relrowsecurity: boolean;
+      relforcerowsecurity: boolean;
+    }>(
+      `
+        select c.relname, c.relrowsecurity, c.relforcerowsecurity
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = any($1::text[])
+      `,
+      [AUTH_TABLES],
+    );
+    expect(result.rows).toHaveLength(AUTH_TABLES.length);
+    for (const row of result.rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it("hides workspaces, members, and custom roles until the tenant setting is present", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const userA = createId();
+    const userB = createId();
+    const memberA = createId();
+    const memberB = createId();
+    const customRole = createId();
+    const admin = requireAdmin();
+    await admin.query(
+      `insert into app_user (id, name, email) values ($1, 'A', $2), ($3, 'B', $4)`,
+      [userA, `${userA}@example.com`, userB, `${userB}@example.com`],
+    );
+    await admin.query(
+      `insert into workspace (id, name, slug) values ($1, 'A', $2), ($3, 'B', $4)`,
+      [workspaceA, `a-${workspaceA.slice(0, 8)}`, workspaceB, `b-${workspaceB.slice(0, 8)}`],
+    );
+    await admin.query(
+      `insert into member (id, workspace_id, user_id, role, role_id, status)
+       values ($1, $2, $3, 'owner', '018f3c2e-7b10-7000-8000-000000000001', 'active'),
+              ($4, $5, $6, 'owner', '018f3c2e-7b10-7000-8000-000000000001', 'active')`,
+      [memberA, workspaceA, userA, memberB, workspaceB, userB],
+    );
+    await admin.query(
+      `insert into "role" (id, workspace_id, name, permissions, is_system)
+       values ($1, $2, 'custom', array[]::text[], false)`,
+      [customRole, workspaceA],
+    );
+
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const hiddenWorkspaces = await app.query<{ n: number }>(
+        "select count(*)::int as n from workspace",
+      );
+      const hiddenMembers = await app.query<{ n: number }>("select count(*)::int as n from member");
+      const hiddenInvites = await app.query<{ n: number }>(
+        "select count(*)::int as n from invitation",
+      );
+      const systemRoles = await app.query<{ n: number }>(
+        `select count(*)::int as n from "role" where is_system`,
+      );
+      const customHidden = await app.query<{ n: number }>(
+        `select count(*)::int as n from "role" where id = $1`,
+        [customRole],
+      );
+      expect(hiddenWorkspaces.rows[0]?.n).toBe(0);
+      expect(hiddenMembers.rows[0]?.n).toBe(0);
+      expect(hiddenInvites.rows[0]?.n).toBe(0);
+      expect(systemRoles.rows[0]?.n).toBe(6);
+      expect(customHidden.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const seenWorkspaces = await app.query<{ id: string }>("select id from workspace");
+      const seenMembers = await app.query<{ id: string }>("select id from member");
+      const seenCustom = await app.query<{ id: string }>(
+        `select id from "role" where not is_system`,
+      );
+      await app.query("rollback");
+      expect(seenWorkspaces.rows.map((row) => row.id)).toEqual([workspaceA]);
+      expect(seenMembers.rows.map((row) => row.id)).toEqual([memberA]);
+      expect(seenCustom.rows.map((row) => row.id)).toEqual([customRole]);
+
+      const asAuth = await auth.query<{ n: number }>(
+        "select count(*)::int as n from app_user where id = $1",
+        [userA],
+      );
+      const asApp = await app.query<{ n: number }>(
+        "select count(*)::int as n from app_user where id = $1",
+        [userB],
+      );
+      expect(asAuth.rows[0]?.n).toBe(1);
+      expect(asApp.rows[0]?.n).toBe(0);
+    } finally {
+      app.release();
+      await auth.end();
+      await admin.query(`delete from "role" where id = $1`, [customRole]);
+      await admin.query("delete from member where id = any($1::text[])", [[memberA, memberB]]);
+      await admin.query("delete from workspace where id = any($1::text[])", [
+        [workspaceA, workspaceB],
+      ]);
+      await admin.query("delete from app_user where id = any($1::text[])", [[userA, userB]]);
+    }
+  });
+
   it("reverts the migration and applies it again", async () => {
     await disconnect();
     const reverted = await migrate("down");
-    expect(reverted.reverted).toEqual(["0001_extensions_and_infra"]);
+    expect(reverted.reverted).toEqual(["0002_auth_workspaces"]);
 
     const check = createPool(readDatabaseUrl());
     const missing = await check.query<{ name: string | null }>(
+      "select to_regclass('public.app_user')::text as name",
+    );
+    const file = await check.query<{ name: string | null }>(
       "select to_regclass('public.file')::text as name",
     );
     expect(missing.rows[0]?.name).toBeNull();
+    expect(file.rows[0]?.name).toBe("file");
     await check.end();
 
     const applied = await migrate("up");
-    expect(applied.applied).toEqual(["0001_extensions_and_infra"]);
+    expect(applied.applied).toEqual(["0002_auth_workspaces"]);
     await connect();
 
     const workspaceA = createId();

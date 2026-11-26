@@ -51,4 +51,65 @@ export interface Database {
     cost_estimate_cents: string | null;
     at: Generated<Date | null>;
   };
+  app_user: {
+    id: string;
+    name: string;
+    email: string;
+    email_verified: boolean;
+    image: string | null;
+    phone: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    logo: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    metadata: string | null;
+    timezone: string;
+    currency: string;
+    units_pref: string;
+    features: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>;
+    plan: string | null;
+    address: ColumnType<
+      Record<string, unknown> | null,
+      Record<string, unknown> | null,
+      Record<string, unknown> | null
+    >;
+    license_number: string | null;
+  };
+  role: {
+    id: string;
+    workspace_id: string | null;
+    name: string;
+    permissions: string[];
+    is_system: boolean;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
+  member: {
+    id: string;
+    workspace_id: string;
+    user_id: string | null;
+    role: string;
+    role_id: string;
+    status: string;
+    invite_email: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
+  invitation: {
+    id: string;
+    workspace_id: string;
+    email: string;
+    role: string | null;
+    status: string;
+    expires_at: Date;
+    created_at: Generated<Date>;
+    inviter_id: string;
+    member_id: string | null;
+  };
 }

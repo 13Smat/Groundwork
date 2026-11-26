@@ -9,10 +9,21 @@ import {
 import type { Logger } from "pino";
 import { z } from "zod/v4";
 
+import type pg from "pg";
+
+import { createAuth } from "./auth/auth.js";
+import { registerAuthHandler } from "./auth/http.js";
+import { createMailer, type Mailer } from "./auth/mail.js";
+import { createDb } from "./db/client.js";
 import { registerProblemHandlers } from "./errors.js";
 import { createLogger } from "./logging.js";
+import { registerGroundworkRoutes } from "./routes/groundwork.js";
 
-export async function buildApp(options?: { logger?: boolean | Logger }) {
+export async function buildApp(options?: {
+  logger?: boolean | Logger;
+  database?: { app: pg.Pool; auth: pg.Pool };
+  mailer?: Mailer;
+}) {
   const logger =
     options?.logger === true ? createLogger("api") : options?.logger ? options.logger : false;
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
@@ -46,6 +57,18 @@ export async function buildApp(options?: { logger?: boolean | Logger }) {
   );
 
   app.get("/openapi.json", async () => app.swagger());
+
+  if (options?.database) {
+    const mailer = options.mailer ?? createMailer(app.log);
+    const auth = createAuth(options.database.auth, mailer);
+    registerAuthHandler(app, auth);
+    await registerGroundworkRoutes(app, {
+      db: createDb(options.database.app),
+      authPool: options.database.auth,
+      auth,
+      mailer,
+    });
+  }
 
   return app;
 }

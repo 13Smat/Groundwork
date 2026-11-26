@@ -6,7 +6,7 @@ import type pg from "pg";
 import { loadLocalEnv, readAppDbPassword, readDatabaseUrl, redactDatabaseUrl } from "../config.js";
 import { createLogger } from "../logging.js";
 import { createPool } from "./client.js";
-import { ensureAppRole } from "./roles.js";
+import { ensureAppRole, ensureAuthRole } from "./roles.js";
 
 const LOCK_KEY = 874221;
 
@@ -51,7 +51,9 @@ export async function migrate(direction: "up" | "down"): Promise<MigrateResult> 
   const client = await pool.connect();
   try {
     await client.query("select pg_advisory_lock($1)", [LOCK_KEY]);
-    await ensureAppRole(pool, readAppDbPassword());
+    const password = readAppDbPassword();
+    await ensureAppRole(pool, password);
+    await ensureAuthRole(pool, password);
     await ensureLedger(client);
     if (direction === "up") {
       return { applied: await applyUp(client), reverted: [] };

@@ -1,6 +1,11 @@
+import type pg from "pg";
+
 import {
+  APP_ROLE,
+  AUTH_ROLE,
   loadLocalEnv,
   readAppDatabaseUrl,
+  readAuthDatabaseUrl,
   readHost,
   readObjectStorageConfig,
   readPort,
@@ -18,10 +23,12 @@ const { createPool } = await import("./db/client.js");
 const { checkObjectStorage } = await import("./storage/s3.js");
 
 const databaseUrl = readAppDatabaseUrl();
+const authDatabaseUrl = readAuthDatabaseUrl();
 const pool = createPool(databaseUrl);
+const authPool = createPool(authDatabaseUrl);
 
-async function assertTenantRole(): Promise<void> {
-  const result = await pool.query<{
+async function assertRole(target: pg.Pool, expected: string): Promise<void> {
+  const result = await target.query<{
     current_user: string;
     rolsuper: boolean;
     rolbypassrls: boolean;
@@ -32,12 +39,18 @@ async function assertTenantRole(): Promise<void> {
     where rolname = current_user
   `);
   const row = result.rows[0];
-  if (!row || row.rolsuper || row.rolbypassrls) {
+  if (!row || row.current_user !== expected || row.rolsuper || row.rolbypassrls) {
     throw new Error(
-      `The API is connected as ${row?.current_user ?? "unknown"}, which bypasses row security. Use APP_DATABASE_URL for the groundwork_app role.`,
+      `Expected the ${expected} role. Connected as ${row?.current_user ?? "unknown"}, which cannot be used for this pool.`,
     );
   }
-  logger.info({ postgis: row.postgis_version, role: row.current_user }, "postgres ready");
+}
+
+async function assertTenantRole(): Promise<void> {
+  await assertRole(pool, APP_ROLE);
+  await assertRole(authPool, AUTH_ROLE);
+  const version = await pool.query<{ postgis_version: string }>("select postgis_version()");
+  logger.info({ postgis: version.rows[0]?.postgis_version, role: APP_ROLE }, "postgres ready");
 }
 
 try {
@@ -50,12 +63,13 @@ try {
     { err: error, database: redactDatabaseUrl(databaseUrl) },
     "startup check failed. Start Postgres and MinIO with docker compose, then run pnpm db:migrate.",
   );
+  await authPool.end();
   await pool.end();
   await telemetry.shutdown();
   process.exit(1);
 }
 
-const app = await buildApp({ logger });
+const app = await buildApp({ logger, database: { app: pool, auth: authPool } });
 const port = readPort(process.env.PORT);
 const host = readHost(process.env.HOST);
 await app.listen({ port, host });
@@ -68,6 +82,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   logger.info({ signal }, "shutting down");
   await app.close();
+  await authPool.end();
   await pool.end();
   await telemetry.shutdown();
   process.exit(0);

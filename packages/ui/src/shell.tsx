@@ -5,10 +5,12 @@ import { KeyboardHelp } from "./keyboard-help";
 export function AppShell({
   title,
   nav,
+  actions,
   children,
 }: {
   title: string;
   nav?: ReactNode;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -27,7 +29,10 @@ export function AppShell({
         <div>
           <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-4">
             <h1 className="text-2xl font-semibold">{title}</h1>
-            <KeyboardHelp />
+            <div className="flex flex-wrap items-center gap-3">
+              {actions}
+              <KeyboardHelp />
+            </div>
           </header>
           <main id="main" className="mx-auto w-full max-w-5xl px-4 py-6">
             {children}
