@@ -3,6 +3,10 @@
  * qualifiers ("read", "read assigned", "read own", "crew only") that are not
  * a vocabulary. ADR 0007 records the tokens below. A later ticket must use
  * these strings; do not invent a second encoding.
+ *
+ * `jobs.force_won` is not in the spec 02 matrix. Spec 03 requires it to mark a
+ * job won without a signed proposal. Wildcards are not expanded, so `jobs.*`
+ * does not include it. Owner and admin hold the token. ADR 0008.
  */
 export const PERMISSIONS = [
   "workspace.manage",
@@ -10,6 +14,7 @@ export const PERMISSIONS = [
   "members.manage",
   "crm.*",
   "jobs.*",
+  "jobs.force_won",
   "crm.read.assigned",
   "jobs.read.assigned",
   "takeoff.*",
@@ -60,6 +65,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleName, readonly Permission
     ...OWN,
     "time.approve",
     "invoice.*",
+    "jobs.force_won",
   ],
   admin: [
     "workspace.manage",
@@ -74,6 +80,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleName, readonly Permission
     ...OWN,
     "time.approve",
     "invoice.*",
+    "jobs.force_won",
   ],
   estimator: [
     "crm.*",

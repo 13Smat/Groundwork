@@ -19,6 +19,15 @@ export {
 } from "./permissions.js";
 export { PROBLEM_JSON_CONTENT_TYPE, problem, problemSchema, type Problem } from "./problem.js";
 export {
+  ForceWonRequiredError,
+  IllegalJobTransitionError,
+  isJobStage,
+  JOB_STAGES,
+  LostReasonRequiredError,
+  transitionJob,
+  type JobStage,
+} from "./state/job.js";
+export {
   assertInviteCurrent,
   assertKeepsAnOwner,
   IllegalMemberTransitionError,

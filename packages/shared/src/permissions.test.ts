@@ -51,5 +51,11 @@ describe("system role permissions", () => {
     ]);
     expect(hasPermission(SYSTEM_ROLE_PERMISSIONS.crew, "catalog.manage")).toBe(false);
     expect(hasPermission(SYSTEM_ROLE_PERMISSIONS.estimator, "catalog.manage")).toBe(true);
+    expect(SYSTEM_ROLE_PERMISSIONS.owner).toContain("jobs.force_won");
+    expect(SYSTEM_ROLE_PERMISSIONS.admin).toContain("jobs.force_won");
+    expect(SYSTEM_ROLE_PERMISSIONS.estimator).not.toContain("jobs.force_won");
+    expect(SYSTEM_ROLE_PERMISSIONS.office).not.toContain("jobs.force_won");
+    expect(SYSTEM_ROLE_PERMISSIONS.foreman).not.toContain("jobs.force_won");
+    expect(SYSTEM_ROLE_PERMISSIONS.crew).not.toContain("jobs.force_won");
   });
 });
