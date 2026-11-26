@@ -68,6 +68,8 @@ The foundations migration adds `file` with `storage_key` (unique), `mime`, `byte
 
 `docs/specs/08-proposals-esign.md` has `/proposal-templates`. No `proposal_template` table is sketched.
 
+[ADR 0020](../adr/0020-proposal-pdf.md) adds `proposal_template` with a name, introduction, scope note, terms, and flags for the site map and optional items. The spec sketch was not edited.
+
 `Photo` is marked v1 in the entity table, and the same row says "MVP: job photos via web upload". The MVP photo table is not sketched.
 
 ## `event_log` has no `workspace_id` in the sketch
@@ -87,6 +89,8 @@ The header says `id uuid` plus `created_at` and `updated_at`. The sketch uses `b
 ## Proposal public token, selected options, and public endpoints
 
 `docs/specs/08-proposals-esign.md` sends the client to a public signed URL to pick optional items before the PDF is sent for signature. The `proposal` sketch has no `public_token_hash` and no `selected_optional_line_ids`. The spec 08 route table has no unauthenticated public proposal endpoints.
+
+[ADR 0020](../adr/0020-proposal-pdf.md) stores `public_token_hash` (SHA-256 hex) and `selected_optional_line_ids`. The raw token is not stored. Public routes are still the next slice. `GET /proposals/:id/pdf`, `GET /estimates/:id/proposals`, and `GET /jobs/:id/proposals` are not in the spec table. They serve the builder. The spec files were not edited.
 
 ## `cost_recipe` `output_unit` vs `input_unit`
 
@@ -126,7 +130,7 @@ Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nv
 
 `docs/specs/04-map-takeoff-manual.md` forbids Google Maps Platform and Mapbox satellite as a measurement or AI input, and says a non-measurement context basemap is "OK only ... with attribution, if at all." Which basemap, if any, is not chosen.
 
-`GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed. [ADR 0017](../adr/0017-takeoff-tools-export.md) renders it in the API as a schematic with the provider, date, GSD, and attribution. It does not composite a COG. A photo for proposals is still open.
+`GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed. [ADR 0017](../adr/0017-takeoff-tools-export.md) renders it in the API as a schematic with the provider, date, GSD, and attribution. It does not composite a COG. [ADR 0020](../adr/0020-proposal-pdf.md) embeds that PNG and repeats the same credit as PDF text. A photo for proposals is still open.
 
 ## `locationId` on `GET /imagery/captures` before the location table exists
 

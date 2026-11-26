@@ -14,6 +14,7 @@ describe("migration files", () => {
       "0009_takeoff.sql",
       "0011_estimating.sql",
       "0012_detection.sql",
+      "0016_proposals.sql",
     ]);
   });
 });

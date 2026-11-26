@@ -1,6 +1,8 @@
-export const PDF_TEMPLATES_PACKAGE = "@groundwork/pdf-templates" as const;
-
-/** React templates rendered to PDF are not in this slice. */
-export function pdfTemplatesPackageName(): string {
-  return PDF_TEMPLATES_PACKAGE;
-}
+export { formatUsd, selectedOptional } from "./money.js";
+export { PROPOSAL_CSP, renderProposalHtml } from "./html.js";
+export {
+  FIELD_VERIFY_NOTE,
+  type ProposalImageryCredit,
+  type ProposalPdfLine,
+  type ProposalPdfModel,
+} from "./types.js";

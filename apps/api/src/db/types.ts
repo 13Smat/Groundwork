@@ -433,4 +433,54 @@ export interface Database {
     updated_at: Generated<Date>;
     created_by: string | null;
   };
+  proposal_template: {
+    id: string;
+    workspace_id: string;
+    name: string;
+    intro: string;
+    scope_note: string;
+    terms: string;
+    include_site_map: boolean;
+    include_optional: boolean;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  proposal: {
+    id: string;
+    workspace_id: string;
+    estimate_id: string;
+    template_id: string | null;
+    number: string;
+    status: string;
+    intro: string;
+    scope_note: string;
+    terms: string;
+    include_site_map: boolean;
+    include_optional: boolean;
+    selected_optional_line_ids: ColumnType<string[], unknown, unknown>;
+    public_token_hash: string;
+    estimate_version: number;
+    snapshot: ColumnType<unknown, unknown, unknown>;
+    pdf_file_id: string | null;
+    signed_pdf_file_id: string | null;
+    provider: string | null;
+    provider_envelope_id: string | null;
+    expires_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  signature: {
+    id: string;
+    workspace_id: string;
+    proposal_id: string;
+    signer_name: string | null;
+    signer_email: string | null;
+    signed_at: Date | null;
+    ip: string | null;
+    provider_event_id: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
 }

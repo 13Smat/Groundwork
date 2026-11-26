@@ -171,6 +171,9 @@ function rethrowEstimate(error: unknown): never {
   if (text.includes("illegal estimate transition")) {
     throw conflict("That estimate status change is not allowed.");
   }
+  if (text.includes("a proposal pins this estimate")) {
+    throw conflict("This estimate is pinned by a proposal. Clone a new version.");
+  }
   if (
     text.includes("outside draft is frozen") ||
     text.includes("lines on an estimate outside draft") ||
@@ -1517,6 +1520,14 @@ export async function transitionEstimateStatus(
         .where("id", "=", estimate.id)
         .execute();
     } else if (result.clearSnapshot) {
+      const pinned = await trx
+        .selectFrom("proposal")
+        .select("id")
+        .where("estimate_id", "=", estimate.id)
+        .executeTakeFirst();
+      if (pinned) {
+        throw conflict("This estimate is pinned by a proposal. Clone a new version.");
+      }
       await trx
         .updateTable("estimate")
         .set({ status: "draft", snapshot: null })

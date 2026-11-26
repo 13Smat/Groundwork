@@ -8,12 +8,16 @@ import {
   loadLocalEnv,
   readAppDatabaseUrl,
   readAuthDatabaseUrl,
+  readDatabaseUrl,
   readHost,
   readPort,
 } from "../src/config.js";
-import { createPool } from "../src/db/client.js";
+import { createDb, createPool } from "../src/db/client.js";
 import { migrate } from "../src/db/migrate.js";
 import { createLogger } from "../src/logging.js";
+import { closeProposalBrowser } from "../src/proposals/pdf.js";
+import { enqueueProposalRender, registerProposalRenderWorker } from "../src/proposals/queue.js";
+import { startQueue } from "../src/queue.js";
 import { ensureBucket, putObject } from "../src/storage/s3.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -55,9 +59,20 @@ await prepareAssistFixture();
 
 const pool = createPool(readAppDatabaseUrl());
 const authPool = createPool(readAuthDatabaseUrl());
+const boss = await startQueue(readDatabaseUrl(), (error) => {
+  createLogger("e2e").error({ err: error }, "pg-boss error");
+});
+const tenantDb = createDb(pool);
+await registerProposalRenderWorker(boss, tenantDb);
 const app = await buildApp({
   logger: createLogger("e2e"),
   database: { app: pool, auth: authPool },
+  proposals: { dispatch: (message) => enqueueProposalRender(boss, message) },
+});
+process.on("SIGTERM", () => {
+  void closeProposalBrowser().then(() =>
+    boss.stop({ graceful: true, close: true, timeout: 5_000 }),
+  );
 });
 
 const port = readPort(process.env.PORT);

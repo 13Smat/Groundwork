@@ -84,3 +84,10 @@ export {
   type EstimateStatus,
   type EstimateTransitionResult,
 } from "./state/estimate.js";
+export {
+  IllegalProposalTransitionError,
+  PROPOSAL_STATUSES,
+  isProposalStatus,
+  transitionProposal,
+  type ProposalStatus,
+} from "./state/proposal.js";

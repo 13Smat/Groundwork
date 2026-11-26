@@ -23,6 +23,9 @@ const logger = createLogger("api");
 const { buildApp } = await import("./app.js");
 const { createDb, createPool } = await import("./db/client.js");
 const { ensureImageryIngestQueue, imageryIngestDispatch } = await import("./imagery/queue.js");
+const { enqueueProposalRender, registerProposalRenderWorker } =
+  await import("./proposals/queue.js");
+const { closeProposalBrowser } = await import("./proposals/pdf.js");
 const { checkTitiler } = await import("./imagery/proxy.js");
 const { startQueue } = await import("./queue.js");
 const { checkObjectStorage } = await import("./storage/s3.js");
@@ -82,12 +85,15 @@ const boss = await startQueue(ownerUrl, (error) => {
   logger.error({ err: error }, "pg-boss error");
 });
 await ensureImageryIngestQueue(boss);
+const tenantDb = createDb(pool);
+await registerProposalRenderWorker(boss, tenantDb);
 logger.info({ database: redactDatabaseUrl(ownerUrl) }, "ingest queue ready");
 
 const app = await buildApp({
   logger,
   database: { app: pool, auth: authPool },
-  imagery: { db: createDb(pool), ingestDispatch: imageryIngestDispatch(boss) },
+  imagery: { db: tenantDb, ingestDispatch: imageryIngestDispatch(boss) },
+  proposals: { dispatch: (message) => enqueueProposalRender(boss, message) },
 });
 const port = readPort(process.env.PORT);
 const host = readHost(process.env.HOST);
@@ -101,6 +107,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   logger.info({ signal }, "shutting down");
   await app.close();
+  await closeProposalBrowser();
   await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   await authPool.end();
   await pool.end();

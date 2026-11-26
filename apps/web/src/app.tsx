@@ -39,9 +39,13 @@ import { PipelinePage } from "./crm/pipeline-page";
 import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
 import { EstimateEditorPage } from "./estimate/editor-page";
 import { JobEstimates } from "./estimate/job-estimates";
+import { JobProposals } from "./proposal/job-proposals";
+import { ProposalStartPage } from "./proposal/start-page";
+import { ProposalTemplatesPage } from "./proposal/templates-page";
 import { TakeoffsPage } from "./takeoff/start";
 
 const TakeoffEditorPage = lazy(() => import("./takeoff/editor-page"));
+const ProposalBuilderPage = lazy(() => import("./proposal/builder-page"));
 
 const NAV = [
   { to: "/", label: "Office" },
@@ -95,8 +99,17 @@ function titleFor(pathname: string): string {
   if (pathname === "/jobs/new") {
     return "New job";
   }
+  if (/^\/jobs\/[^/]+\/estimates\/[^/]+\/proposal$/.test(pathname)) {
+    return "Proposal";
+  }
   if (/^\/jobs\/[^/]+\/estimates\/[^/]+$/.test(pathname)) {
     return "Estimate editor";
+  }
+  if (/^\/jobs\/[^/]+\/proposals$/.test(pathname)) {
+    return "Proposals";
+  }
+  if (/^\/proposals\/[^/]+$/.test(pathname)) {
+    return "Proposal";
   }
   if (/^\/jobs\/[^/]+\/estimates$/.test(pathname)) {
     return "Estimates";
@@ -388,7 +401,38 @@ const estimatesRoute = createRoute({
 const proposalsRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/proposals",
-  component: placeholder("No proposal records are loaded in this slice."),
+  component: ProposalTemplatesPage,
+});
+
+const proposalBuilderRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/proposals/$proposalId",
+  component: function ProposalBuilderRoute() {
+    const { proposalId } = proposalBuilderRoute.useParams();
+    return (
+      <Suspense fallback={<p>Loading proposal.</p>}>
+        <ProposalBuilderPage proposalId={proposalId} />
+      </Suspense>
+    );
+  },
+});
+
+const jobProposalsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/proposals",
+  component: function JobProposalsRoute() {
+    const { jobId } = jobProposalsRoute.useParams();
+    return <JobProposals jobId={jobId} />;
+  },
+});
+
+const proposalStartRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/estimates/$estimateId/proposal",
+  component: function ProposalStartRoute() {
+    const { jobId, estimateId } = proposalStartRoute.useParams();
+    return <ProposalStartPage jobId={jobId} estimateId={estimateId} />;
+  },
 });
 
 const scheduleRoute = createRoute({
@@ -455,6 +499,8 @@ const routeTree = rootRoute.addChildren([
     takeoffEditorRoute,
     jobEstimatesRoute,
     estimateEditorRoute,
+    proposalStartRoute,
+    jobProposalsRoute,
     clientsRoute,
     clientDetailRoute,
     locationRoute,
@@ -466,6 +512,7 @@ const routeTree = rootRoute.addChildren([
     recipeEditRoute,
     estimatesRoute,
     proposalsRoute,
+    proposalBuilderRoute,
     scheduleRoute,
     invoicesRoute,
     settingsRoute,

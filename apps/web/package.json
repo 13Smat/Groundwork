@@ -19,6 +19,7 @@
     "@turf/union": "7.4.0",
     "better-auth": "1.7.28",
     "maplibre-gl": "6.19.0",
+    "pdfjs-dist": "4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "terra-draw": "1.40.0",
