@@ -37,6 +37,8 @@ import { JobsPage } from "./crm/jobs-page";
 import { LocationPage } from "./crm/location-page";
 import { PipelinePage } from "./crm/pipeline-page";
 import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
+import { EstimateEditorPage } from "./estimate/editor-page";
+import { JobEstimates } from "./estimate/job-estimates";
 import { TakeoffsPage } from "./takeoff/start";
 
 const TakeoffEditorPage = lazy(() => import("./takeoff/editor-page"));
@@ -92,6 +94,12 @@ function titleFor(pathname: string): string {
   }
   if (pathname === "/jobs/new") {
     return "New job";
+  }
+  if (/^\/jobs\/[^/]+\/estimates\/[^/]+$/.test(pathname)) {
+    return "Estimate editor";
+  }
+  if (/^\/jobs\/[^/]+\/estimates$/.test(pathname)) {
+    return "Estimates";
   }
   if (/^\/jobs\/[^/]+\/takeoffs\/[^/]+$/.test(pathname)) {
     return "Takeoff editor";
@@ -353,10 +361,28 @@ const recipeEditRoute = createRoute({
   },
 });
 
+const jobEstimatesRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/estimates",
+  component: function JobEstimatesRoute() {
+    const { jobId } = jobEstimatesRoute.useParams();
+    return <JobEstimates jobId={jobId} />;
+  },
+});
+
+const estimateEditorRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/estimates/$estimateId",
+  component: function EstimateEditorRoute() {
+    const { jobId, estimateId } = estimateEditorRoute.useParams();
+    return <EstimateEditorPage jobId={jobId} estimateId={estimateId} />;
+  },
+});
+
 const estimatesRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/estimates",
-  component: placeholder("No estimate records are loaded in this slice."),
+  component: placeholder("Open a job and choose Estimates."),
 });
 
 const proposalsRoute = createRoute({
@@ -427,6 +453,8 @@ const routeTree = rootRoute.addChildren([
     jobDetailRoute,
     jobTakeoffsRoute,
     takeoffEditorRoute,
+    jobEstimatesRoute,
+    estimateEditorRoute,
     clientsRoute,
     clientDetailRoute,
     locationRoute,

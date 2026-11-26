@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0017. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. The CRM UI shipped without a new ADR.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0020. Catalog starter pack is 0011. Takeoff measurements are 0013. The takeoff editor is 0014. The estimating engine is 0015. AI takeoff assist is 0016. Estimate quantity sync and versions are 0019. ADR 0017 and ADR 0018 are reserved for the parallel map-takeoff and AI-assist slices. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |
@@ -20,3 +20,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0014](0014-takeoff-editor.md) | Takeoff editor |
 | [0015](0015-estimating-engine.md) | Takeoff-to-estimate engine |
 | [0016](0016-ai-takeoff-assist.md) | AI takeoff assist, the CV contract, and the mock adapter |
+| [0019](0019-estimate-sync-and-versions.md) | Estimate quantity sync and versions |

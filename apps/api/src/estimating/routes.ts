@@ -15,11 +15,15 @@ import { ProblemError } from "../errors.js";
 import { stripEstimateCosts } from "./access.js";
 import {
   addManualLine,
+  applyQuantities,
+  cloneEstimateVersion,
   createEstimate,
   deleteLine,
   getEstimate,
+  listJobEstimates,
   patchEstimate,
   patchLine,
+  quantityDiff,
   recalculateEstimate,
   transitionEstimateStatus,
   type EstimateView,
@@ -74,6 +78,7 @@ const lineSchema = z.object({
   price_overridden: z.boolean(),
   measurement_ids: z.array(z.string()),
   sort: z.number().int(),
+  recipe_variables: z.record(z.string(), z.string()),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -101,6 +106,34 @@ const estimateSchema = z.object({
   lines: z.array(lineSchema),
   created_at: z.string(),
   updated_at: z.string(),
+});
+
+const summarySchema = z.object({
+  id: z.string(),
+  job_id: z.string(),
+  takeoff_id: z.string().nullable(),
+  number: z.string(),
+  version: z.number().int(),
+  status: z.enum(STATUSES),
+  total_cents: z.number().int(),
+  updated_at: z.string(),
+});
+
+const quantityItemSchema = z.object({
+  change: z.enum(["added", "removed", "changed"]),
+  takeoff_item_id: z.string(),
+  name: z.string(),
+  unit: z.string(),
+  old_qty: z.string().nullable(),
+  new_qty: z.string().nullable(),
+});
+
+const quantityDiffSchema = z.object({
+  estimate_id: z.string(),
+  takeoff_id: z.string().nullable(),
+  compared_takeoff_id: z.string().nullable(),
+  compared_takeoff_version: z.number().int().nullable(),
+  items: z.array(quantityItemSchema),
 });
 
 const percent = z.union([z.string(), z.number()]);
@@ -207,6 +240,20 @@ export async function registerEstimateRoutes(app: ApiApp, ctx: EstimateContext):
           }).then((created) => present(created, permissions)),
       );
       return reply.status(201).send(view);
+    },
+  );
+
+  app.get(
+    "/jobs/:id/estimates",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: z.object({ id: z.uuidv7() }),
+        response: { 200: z.object({ estimates: z.array(summarySchema) }) },
+      },
+    },
+    async (request) => {
+      return inWorkspace(request, "read", ({ trx }) => listJobEstimates(trx, request.params.id));
     },
   );
 
@@ -453,6 +500,70 @@ export async function registerEstimateRoutes(app: ApiApp, ctx: EstimateContext):
         });
         return present(view, permissions);
       });
+    },
+  );
+
+  app.get(
+    "/estimates/:id/quantity-diff",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: z.object({ id: z.uuidv7() }),
+        response: { 200: quantityDiffSchema },
+      },
+    },
+    async (request) => {
+      return inWorkspace(request, "read", ({ trx }) => quantityDiff(trx, request.params.id));
+    },
+  );
+
+  app.post(
+    "/estimates/:id/apply-quantities",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: z.object({ id: z.uuidv7() }),
+        body: z.object({
+          takeoff_item_ids: z.array(z.uuidv7()).optional(),
+        }),
+        response: { 200: estimateSchema },
+      },
+    },
+    async (request) => {
+      return inWorkspace(request, "write", async ({ trx, workspaceId, member, permissions }) => {
+        const view = await applyQuantities(trx, {
+          workspaceId,
+          memberId: member.id,
+          estimateId: request.params.id,
+          takeoffItemIds: request.body.takeoff_item_ids,
+        });
+        return present(view, permissions);
+      });
+    },
+  );
+
+  app.post(
+    "/estimates/:id/versions",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: z.object({ id: z.uuidv7() }),
+        body: z.object({}),
+        response: { 201: estimateSchema },
+      },
+    },
+    async (request, reply) => {
+      const view = await inWorkspace(
+        request,
+        "write",
+        ({ trx, workspaceId, member, permissions }) =>
+          cloneEstimateVersion(trx, {
+            workspaceId,
+            memberId: member.id,
+            estimateId: request.params.id,
+          }).then((created) => present(created, permissions)),
+      );
+      return reply.status(201).send(view);
     },
   );
 }

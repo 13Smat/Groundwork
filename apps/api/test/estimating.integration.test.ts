@@ -5,6 +5,8 @@ import {
   priceFromCost,
   priceRecipeComponent,
   roundQty,
+  sumQuantities,
+  takeoffQuantityForRecipe,
   type TakeoffGroupSource,
 } from "@groundwork/pricing";
 import { createId } from "@groundwork/shared";
@@ -48,6 +50,7 @@ type EstimateBody = {
   number: string;
   version: number;
   status: string;
+  takeoff_id: string | null;
   markup_pct: string;
   overhead_pct: string;
   tax_rate: string;
@@ -830,5 +833,511 @@ describe("estimating", () => {
       ]),
     );
     expect(JSON.stringify(rows.rows.map((row) => row.diff))).not.toMatch(/cost|margin/i);
+  });
+});
+
+type DiffItem = {
+  change: "added" | "removed" | "changed";
+  takeoff_item_id: string;
+  name: string;
+  unit: string;
+  old_qty: string | null;
+  new_qty: string | null;
+};
+
+type DiffBody = {
+  takeoff_id: string | null;
+  compared_takeoff_id: string | null;
+  compared_takeoff_version: number | null;
+  items: DiffItem[];
+};
+
+type FeatureBody = {
+  id: string;
+  properties: { takeoff_item_id: string; value_m2: string | null };
+};
+
+async function activateRecipe(
+  name: string,
+  itemId: string,
+  catalogId: string,
+  formula: string,
+): Promise<void> {
+  const created = await requireApp().inject({
+    method: "POST",
+    url: "/cost-recipes",
+    headers: headers(owner.cookie),
+    payload: {
+      name,
+      input_unit: "yd2",
+      takeoff_item_id: itemId,
+      variables: { depth_in: "2" },
+      components: [{ catalog_item_id: catalogId, qty_formula: formula }],
+    },
+  });
+  expect(created.statusCode, created.body).toBe(201);
+  const activated = await requireApp().inject({
+    method: "PATCH",
+    url: `/cost-recipes/${created.json().id}`,
+    headers: headers(owner.cookie),
+    payload: { status: "active" },
+  });
+  expect(activated.statusCode, activated.body).toBe(200);
+}
+
+async function saveAreas(
+  takeoff: string,
+  features: { id?: string; itemId: string; widthM: number; heightM: number; originLat: number }[],
+): Promise<FeatureBody[]> {
+  const response = await requireApp().inject({
+    method: "PUT",
+    url: `/takeoffs/${takeoff}/measurements`,
+    headers: headers(owner.cookie),
+    payload: {
+      features: features.map((feature) => ({
+        id: feature.id ?? createId(),
+        takeoff_item_id: feature.itemId,
+        kind: "area",
+        geom: geodesicRectangle({
+          origin: [-81.7, feature.originLat],
+          widthM: feature.widthM,
+          heightM: feature.heightM,
+        }),
+      })),
+    },
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  return response.json().features as FeatureBody[];
+}
+
+async function measurementSum(takeoff: string, itemId: string): Promise<string> {
+  const response = await requireApp().inject({
+    method: "GET",
+    url: `/takeoffs/${takeoff}/measurements`,
+    headers: headers(owner.cookie, workspaceId, false),
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  const features = response.json().features as FeatureBody[];
+  return sumQuantities(
+    features
+      .filter((feature) => feature.properties.takeoff_item_id === itemId)
+      .map((feature) => feature.properties.value_m2 ?? "0"),
+  );
+}
+
+function yards(canonical: string): string {
+  return takeoffQuantityForRecipe("area", canonical, "yd2");
+}
+
+describe("quantity sync and versions", () => {
+  it("lists added, removed, and changed quantities and reprices only the accepted lines", async () => {
+    const stone = await createCatalog("Sync stone", "ton", 5000);
+    const walk = await createCatalog("Sync walk", "yd2", 800);
+    const surface = await createTakeoffItem("Sync surface");
+    const sidewalk = await createTakeoffItem("Sync sidewalk");
+    const extra = await createTakeoffItem("Sync extra");
+    await activateRecipe("Sync surface", surface, stone.id, "area_yd2 * depth_in");
+    await activateRecipe("Sync sidewalk", sidewalk, walk.id, "area_yd2");
+    const job = await createJob();
+    const takeoff = await createPlanset(job.id);
+    const saved = await saveAreas(takeoff, [
+      { itemId: surface, widthM: 12, heightM: 12, originLat: 35.7 },
+      { itemId: sidewalk, widthM: 4, heightM: 10, originLat: 35.701 },
+    ]);
+    const surfaceFeature = saved.find((feature) => feature.properties.takeoff_item_id === surface);
+    const sidewalkFeature = saved.find(
+      (feature) => feature.properties.takeoff_item_id === sidewalk,
+    );
+    if (!surfaceFeature || !sidewalkFeature) {
+      throw new Error("The takeoff measurements were not saved.");
+    }
+    const original = await measurementSum(takeoff, surface);
+    const created = await requireApp().inject({
+      method: "POST",
+      url: `/jobs/${job.id}/estimates`,
+      headers: headers(owner.cookie),
+      payload: { from_takeoff_id: takeoff },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const estimate = created.json() as EstimateBody;
+    const sidewalkLine = estimate.lines.find((line) => line.catalog_item_id === walk.id);
+    if (!sidewalkLine) {
+      throw new Error("The sidewalk line was not generated.");
+    }
+    const quiet = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${estimate.id}/quantity-diff`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(quiet.statusCode, quiet.body).toBe(200);
+    expect(quiet.json()).toMatchObject({
+      takeoff_id: takeoff,
+      compared_takeoff_id: takeoff,
+      compared_takeoff_version: 1,
+      items: [],
+    });
+
+    await saveAreas(takeoff, [
+      { id: surfaceFeature.id, itemId: surface, widthM: 12, heightM: 24, originLat: 35.7 },
+    ]);
+    const enlarged = await measurementSum(takeoff, surface);
+    const changed = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${estimate.id}/quantity-diff`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect((changed.json() as DiffBody).items).toEqual([
+      {
+        change: "changed",
+        takeoff_item_id: surface,
+        name: "Sync surface",
+        unit: "yd2",
+        old_qty: yards(original),
+        new_qty: yards(enlarged),
+      },
+    ]);
+
+    const manual = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/lines`,
+      headers: headers(owner.cookie),
+      payload: { description: "Mobilization", qty: "1", unit: "ea", unit_price_cents: 15000 },
+    });
+    expect(manual.statusCode, manual.body).toBe(201);
+    const before = manual.json() as EstimateBody;
+    const applied = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/apply-quantities`,
+      headers: headers(owner.cookie),
+      payload: { takeoff_item_ids: [surface] },
+    });
+    expect(applied.statusCode, applied.body).toBe(200);
+    const synced = applied.json() as EstimateBody;
+    const stoneLine = synced.lines.find((line) => line.catalog_item_id === stone.id);
+    const stillSidewalk = synced.lines.find((line) => line.catalog_item_id === walk.id);
+    const mobilization = synced.lines.find((line) => line.description === "Mobilization");
+    expect(stoneLine?.input_qty).toBe(yards(enlarged));
+    expect(stoneLine?.price_cents).not.toBe(
+      before.lines.find((line) => line.catalog_item_id === stone.id)?.price_cents,
+    );
+    expect(stillSidewalk?.updated_at).toBe(sidewalkLine.updated_at);
+    expect(mobilization?.price_cents).toBe(15000);
+
+    const sidewalkQty = sidewalkLine.input_qty;
+    const removed = await requireApp().inject({
+      method: "DELETE",
+      url: `/measurements/${sidewalkFeature.id}`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(removed.statusCode).toBe(204);
+    await saveAreas(takeoff, [{ itemId: extra, widthM: 3, heightM: 3, originLat: 35.702 }]);
+    const addedSum = await measurementSum(takeoff, extra);
+    const again = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${estimate.id}/quantity-diff`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(again.statusCode, again.body).toBe(200);
+    expect((again.json() as DiffBody).items).toEqual([
+      {
+        change: "added",
+        takeoff_item_id: extra,
+        name: "Sync extra",
+        unit: "yd2",
+        old_qty: null,
+        new_qty: yards(addedSum),
+      },
+      {
+        change: "removed",
+        takeoff_item_id: sidewalk,
+        name: "Sync sidewalk",
+        unit: "yd2",
+        old_qty: sidewalkQty,
+        new_qty: null,
+      },
+    ]);
+    const finished = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/apply-quantities`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(finished.statusCode, finished.body).toBe(200);
+    const body = finished.json() as EstimateBody;
+    expect(body.lines.some((line) => line.catalog_item_id === walk.id)).toBe(false);
+    expect(body.lines.some((line) => line.description === "Mobilization")).toBe(true);
+    const flagged = body.lines.find((line) => line.description === "Sync extra");
+    expect(flagged).toMatchObject({ flagged: true, price_cents: 0, input_qty: yards(addedSum) });
+    const audits = await requireAdmin().query<{ action: string; diff: unknown }>(
+      `select action, diff from audit_log
+       where entity_id = $1::uuid and action = 'apply_quantities'
+       order by id`,
+      [estimate.id],
+    );
+    expect(audits.rows).toHaveLength(2);
+    expect(JSON.stringify(audits.rows.map((row) => row.diff))).not.toMatch(/cost|margin/i);
+  });
+
+  it("diffs the newest takeoff in the lineage and keeps a ready snapshot after a new version", async () => {
+    const mix = await createCatalog("Lineage mix", "ton", 4000);
+    const pad = await createTakeoffItem("Lineage pad");
+    await activateRecipe("Lineage pad", pad, mix.id, "area_yd2");
+    const job = await createJob();
+    let takeoff = await createPlanset(job.id);
+    await saveAreas(takeoff, [{ itemId: pad, widthM: 8, heightM: 8, originLat: 35.71 }]);
+    const original = await measurementSum(takeoff, pad);
+    const created = await requireApp().inject({
+      method: "POST",
+      url: `/jobs/${job.id}/estimates`,
+      headers: headers(owner.cookie),
+      payload: { from_takeoff_id: takeoff },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const estimate = created.json() as EstimateBody;
+    const ready = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/transition`,
+      headers: headers(owner.cookie),
+      payload: { to: "ready" },
+    });
+    expect(ready.statusCode, ready.body).toBe(200);
+    const frozenTotal = (ready.json() as EstimateBody).total_cents;
+    const frozenCost = (ready.json() as EstimateBody).lines[0]?.cost_cents;
+
+    for (const status of ["in_review", "final", "draft"]) {
+      const moved = await requireApp().inject({
+        method: "PATCH",
+        url: `/takeoffs/${takeoff}`,
+        headers: headers(owner.cookie),
+        payload: { status },
+      });
+      expect(moved.statusCode, moved.body).toBe(200);
+      takeoff = moved.json().id as string;
+    }
+    expect(takeoff).not.toBe(estimate.takeoff_id);
+    await saveAreas(takeoff, [{ itemId: pad, widthM: 8, heightM: 20, originLat: 35.712 }]);
+    const enlarged = await measurementSum(takeoff, pad);
+
+    const blocked = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${estimate.id}/quantity-diff`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(blocked.statusCode).toBe(409);
+    const refused = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/apply-quantities`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(refused.statusCode).toBe(409);
+
+    const cloned = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/versions`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(cloned.statusCode, cloned.body).toBe(201);
+    const draft = cloned.json() as EstimateBody;
+    expect(draft).toMatchObject({
+      number: estimate.number,
+      version: 2,
+      status: "draft",
+      takeoff_id: estimate.takeoff_id,
+    });
+    const superseded = await getEstimate(estimate.id);
+    expect(superseded.body.status).toBe("superseded");
+    expect(superseded.body.total_cents).toBe(frozenTotal);
+    expect(superseded.body.lines[0]?.cost_cents).toBe(frozenCost);
+
+    const diff = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${draft.id}/quantity-diff`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(diff.statusCode, diff.body).toBe(200);
+    expect(diff.json()).toMatchObject({
+      takeoff_id: estimate.takeoff_id,
+      compared_takeoff_id: takeoff,
+      compared_takeoff_version: 2,
+      items: [
+        {
+          change: "changed",
+          takeoff_item_id: pad,
+          name: "Lineage pad",
+          unit: "yd2",
+          old_qty: yards(original),
+          new_qty: yards(enlarged),
+        },
+      ],
+    });
+    const applied = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${draft.id}/apply-quantities`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(applied.statusCode, applied.body).toBe(200);
+    const synced = applied.json() as EstimateBody;
+    expect(synced.takeoff_id).toBe(takeoff);
+    expect(synced.lines[0]?.input_qty).toBe(yards(enlarged));
+
+    const marked = await requireApp().inject({
+      method: "PATCH",
+      url: `/estimates/${draft.id}`,
+      headers: headers(owner.cookie),
+      payload: { markup_pct: "25" },
+    });
+    expect(marked.statusCode, marked.body).toBe(200);
+    expect((marked.json() as EstimateBody).total_cents).not.toBe(frozenTotal);
+    const still = await getEstimate(estimate.id);
+    expect(still.body.total_cents).toBe(frozenTotal);
+    expect(still.body.lines[0]?.cost_cents).toBe(frozenCost);
+    const frozenRow = await requireAdmin().query<{ total_cents: number }>(
+      `select (snapshot->>'total_cents')::int as total_cents from estimate where id = $1`,
+      [estimate.id],
+    );
+    expect(frozenRow.rows[0]?.total_cents).toBe(frozenTotal);
+    const edit = await requireApp().inject({
+      method: "PATCH",
+      url: `/estimates/${estimate.id}`,
+      headers: headers(owner.cookie),
+      payload: { notes: "no" },
+    });
+    expect(edit.statusCode).toBe(409);
+
+    const audits = await requireAdmin().query<{ action: string; diff: unknown }>(
+      `select action, diff from audit_log where entity_id = $1::uuid and action = 'version'`,
+      [draft.id],
+    );
+    expect(audits.rows).toHaveLength(1);
+    expect(JSON.stringify(audits.rows[0]?.diff)).not.toMatch(/cost|margin/i);
+  });
+
+  it("leaves a draft in place when cloning it and supersedes a sent estimate", async () => {
+    const job = await createJob();
+    const created = await requireApp().inject({
+      method: "POST",
+      url: `/jobs/${job.id}/estimates`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const estimate = created.json() as EstimateBody;
+    const cloned = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/versions`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(cloned.statusCode, cloned.body).toBe(201);
+    expect(cloned.json()).toMatchObject({ number: estimate.number, version: 2, status: "draft" });
+    const first = await getEstimate(estimate.id);
+    expect(first.body.status).toBe("draft");
+    expect(first.body.version).toBe(1);
+
+    const priced = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/lines`,
+      headers: headers(owner.cookie),
+      payload: { description: "Permit", qty: "1", unit: "ea", unit_price_cents: 2500 },
+    });
+    expect(priced.statusCode, priced.body).toBe(201);
+    const total = (priced.json() as EstimateBody).total_cents;
+    for (const status of ["ready", "sent"]) {
+      const moved = await requireApp().inject({
+        method: "POST",
+        url: `/estimates/${estimate.id}/transition`,
+        headers: headers(owner.cookie),
+        payload: { to: status },
+      });
+      expect(moved.statusCode, moved.body).toBe(200);
+    }
+    const next = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimate.id}/versions`,
+      headers: headers(owner.cookie),
+      payload: {},
+    });
+    expect(next.statusCode, next.body).toBe(201);
+    expect(next.json()).toMatchObject({ number: estimate.number, version: 3, status: "draft" });
+    const sent = await getEstimate(estimate.id);
+    expect(sent.body.status).toBe("superseded");
+    expect(sent.body.total_cents).toBe(total);
+  });
+
+  it("hides quantity-diff costs from office and rejects another workspace", async () => {
+    const person = await signUp("Sync Office Owner");
+    const workspace = await createWorkspace(person.cookie, "Sync Office Co");
+    const job = await createJob(person.cookie, workspace.id);
+    const created = await requireApp().inject({
+      method: "POST",
+      url: `/jobs/${job.id}/estimates`,
+      headers: headers(person.cookie, workspace.id),
+      payload: {},
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const estimateId = created.json().id as string;
+    const reader = await signUp("Sync Office Reader");
+    const roles = await requireApp().inject({
+      method: "GET",
+      url: "/roles",
+      headers: { ...BROWSER, cookie: person.cookie },
+    });
+    const roleId = roles.json().roles.find((item: { name: string }) => item.name === "office")?.id;
+    const invited = await requireApp().inject({
+      method: "POST",
+      url: `/workspaces/${workspace.id}/invites`,
+      headers: headers(person.cookie, workspace.id),
+      payload: { email: reader.email, roleId },
+    });
+    expect(invited.statusCode, invited.body).toBe(201);
+    const accepted = await requireApp().inject({
+      method: "POST",
+      url: `/invites/${invited.json().id}/accept`,
+      headers: { ...BROWSER, cookie: reader.cookie },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(200);
+
+    const seen = await requireApp().inject({
+      method: "GET",
+      url: `/estimates/${estimateId}/quantity-diff`,
+      headers: headers(reader.cookie, workspace.id, false),
+    });
+    expect(seen.statusCode, seen.body).toBe(200);
+    assertNoCosts(seen.json());
+    const listed = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${job.id}/estimates`,
+      headers: headers(reader.cookie, workspace.id, false),
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    assertNoCosts(listed.json());
+    const write = await requireApp().inject({
+      method: "POST",
+      url: `/estimates/${estimateId}/apply-quantities`,
+      headers: headers(reader.cookie, workspace.id),
+      payload: {},
+    });
+    expect(write.statusCode).toBe(403);
+
+    const outsider = await signUp("Sync Outsider");
+    const other = await createWorkspace(outsider.cookie, "Sync Other Co");
+    for (const [method, url, payload] of [
+      ["GET", `/estimates/${estimateId}/quantity-diff`, undefined],
+      ["POST", `/estimates/${estimateId}/apply-quantities`, {}],
+      ["POST", `/estimates/${estimateId}/versions`, {}],
+      ["GET", `/jobs/${job.id}/estimates`, undefined],
+    ] as const) {
+      const hidden = await requireApp().inject({
+        method,
+        url,
+        headers: headers(outsider.cookie, other.id, payload !== undefined),
+        ...(payload ? { payload } : {}),
+      });
+      expect({ url, status: hidden.statusCode, body: hidden.body }).toMatchObject({ status: 404 });
+    }
   });
 });

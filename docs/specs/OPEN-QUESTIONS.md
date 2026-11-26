@@ -112,7 +112,9 @@ Spec 07 names markup, overhead, and tax and does not say whether the stored rate
 
 Spec 07 says a negative line needs permission. Spec 02 has no discount token. ADR 0015 uses `catalog.manage` and does not add one. Roles without that token do not receive cost or margin fields. Office has `estimate.read` and not `estimate.*`.
 
-The spec 01 sketch has `snapshot jsonb` and does not say when it is written or what it holds. ADR 0015 writes the view, including costs, when the estimate leaves draft. `GET` of a non-draft row returns that snapshot. `accepted` does not require a signature. That is spec 08. Quantity diff and estimate versions are spec 07 part 2. The spec files were not edited.
+The spec 01 sketch has `snapshot jsonb` and does not say when it is written or what it holds. ADR 0015 writes the view, including costs, when the estimate leaves draft. `GET` of a non-draft row returns that snapshot. `accepted` does not require a signature. That is spec 08.
+
+Spec 07 part 2 asks for a quantity diff and version n+1 and does not say the unit, whether a draft is superseded, or how a partial apply chooses rows. [ADR 0019](../adr/0019-estimate-sync-and-versions.md) compares quantities in the takeoff item's default unit, reads the newest takeoff in the lineage, and returns 409 on a non-draft. `ready` and `sent` become `superseded` when cloned. A draft does not. `accepted` stays, because the state machine has no transition. `GET /jobs/:id/estimates` is the list the editor uses. The spec table does not name it. There is no phase column. The editor groups by the existing line group. The spec files were not edited.
 
 ## Node 22 vs 24
 

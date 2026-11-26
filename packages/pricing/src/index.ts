@@ -26,6 +26,8 @@ export {
   type RecipePreview,
 } from "./preview.js";
 export {
+  canonicalUnit,
+  convertQuantity,
   defaultTaxCode,
   extendCents,
   isMaterialsTaxCode,
