@@ -6,7 +6,7 @@
 
 - Added `0004_imagery_ingest.sql` for `imagery_ingest_job` and the capture status trigger. `groundwork_app` can write a global imagery row only while `app.imagery_admin` is `on` for that transaction. ADR 0008.
 - Added `services/imagery-ingest`. It converts the committed 4-band fixture GeoTIFF to a COG. NC ortho, Helene 2025, and NAIP download one configured HTTPS GeoTIFF only when the live-fetch env vars are set. CI does not set them.
-- Added `POST /imagery/ingest`, `GET /imagery/ingest/:jobId`, and `GET/POST/PATCH /admin/imagery-sources`. The caller needs a session, an active membership, and the `owner` or `admin` role. Other roles get 403. Illegal capture transitions return 409.
+- Added `POST /imagery/ingest`, `GET /imagery/ingest/:jobId`, and `GET/POST/PATCH /admin/imagery-sources`. The caller needs a session, an active membership, and the `owner` or `admin` role. Other roles get 403. All five routes are tagged `tenant-header`, so a session that is not a member gets 404. Illegal capture transitions return 409.
 - The office app has an Imagery screen for owner and admin. The Python unit tests run in `check`. The imagery CI job runs the fixture ingest through MinIO and TiTiler. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 
 ### Ticket 02 — Auth and workspaces

@@ -41,6 +41,7 @@ export async function registerImageryAdminRoutes(
     "/admin/imagery-sources",
     {
       schema: {
+        tags: ["tenant-header"],
         response: { 200: z.object({ sources: z.array(imagerySourceResponseSchema) }) },
       },
     },
@@ -55,6 +56,7 @@ export async function registerImageryAdminRoutes(
     "/admin/imagery-sources",
     {
       schema: {
+        tags: ["tenant-header"],
         body: createSourceBodySchema,
         response: { 201: imagerySourceResponseSchema },
       },
@@ -70,6 +72,7 @@ export async function registerImageryAdminRoutes(
     "/admin/imagery-sources/:sourceId",
     {
       schema: {
+        tags: ["tenant-header"],
         params: z.object({ sourceId: z.uuidv7() }),
         body: patchSourceBodySchema,
         response: { 200: imagerySourceResponseSchema },
@@ -85,6 +88,7 @@ export async function registerImageryAdminRoutes(
     "/imagery/ingest",
     {
       schema: {
+        tags: ["tenant-header"],
         body: ingestBodySchema,
         response: { 200: ingestJobResponseSchema, 202: ingestJobResponseSchema },
       },
@@ -106,6 +110,7 @@ export async function registerImageryAdminRoutes(
     "/imagery/ingest/:jobId",
     {
       schema: {
+        tags: ["tenant-header"],
         params: z.object({ jobId: z.uuidv7() }),
         response: { 200: ingestJobResponseSchema },
       },

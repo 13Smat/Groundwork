@@ -13,6 +13,7 @@ import {
   readAppDatabaseUrl,
   readAuthDatabaseUrl,
   readDatabaseUrl,
+  readObjectStorageConfig,
   readTitilerUrl,
 } from "../src/config.js";
 import { createDb, createPool } from "../src/db/client.js";
@@ -27,7 +28,7 @@ import {
 } from "../src/imagery/queue.js";
 import { applyImageryCaptureTransition } from "../src/imagery/transition.js";
 import { startQueue } from "../src/queue.js";
-import { objectExists } from "../src/storage/s3.js";
+import { ensureBucket, objectExists, putObject } from "../src/storage/s3.js";
 import { readPngPixel } from "./png.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -59,6 +60,10 @@ const createdCaptures: string[] = [];
 
 beforeAll(async () => {
   await migrate("up");
+  // The seeded fixture capture points at this object. TiTiler keeps a missing
+  // object as missing for the life of the process, so the file has to be in
+  // the bucket before any tile request, including the later imagery suite.
+  await loadFixtureCog();
   admin = createPool(readDatabaseUrl());
   appPool = createPool(readAppDatabaseUrl());
   authPool = createPool(readAuthDatabaseUrl());
@@ -154,7 +159,7 @@ describe("imagery ingest", () => {
       url: `/imagery/tiles/${job.captureId}/${fixture.tile.z}/${fixture.tile.x}/${fixture.tile.y}`,
       headers: memberHeaders(ownerCookie),
     });
-    expect(tile.statusCode).toBe(200);
+    expect(tile.statusCode, tile.body).toBe(200);
     expect(tile.headers["content-type"]).toContain("image/png");
     expect(readPngPixel(tile.rawPayload, 128, 128)).toEqual({
       r: fixture.color.r,
@@ -194,7 +199,7 @@ describe("imagery ingest", () => {
       url: `/imagery/tiles/${fixtureId}/16/17894/25791`,
       headers: memberHeaders(ownerCookie),
     });
-    expect(tile.statusCode).toBe(200);
+    expect(tile.statusCode, tile.body).toBe(200);
   });
 
   it("returns 409 for an illegal capture transition and for a reused idempotency key", async () => {
@@ -389,6 +394,22 @@ async function waitFor(jobId: string): Promise<JobBody> {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Ingest stayed ingesting: ${JSON.stringify(last)}`);
+}
+
+async function loadFixtureCog(): Promise<void> {
+  const storage = readObjectStorageConfig();
+  await ensureBucket(storage);
+  const fixture = JSON.parse(
+    readFileSync(path.join(root, "db/seed/fixtures/rgbir-cog.json"), "utf8"),
+  ) as { key: string };
+  await putObject(
+    {
+      storageKey: fixture.key,
+      body: readFileSync(path.join(root, "db/seed/fixtures/rgbir-cog.tif")),
+      mime: "image/tiff",
+    },
+    storage,
+  );
 }
 
 async function sourceIdByName(name: string): Promise<string> {
