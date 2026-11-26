@@ -1,0 +1,27 @@
+# Node
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+
+# Env and secrets. .env.example is the only env file that belongs in git.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build output
+dist/
+build/
+.turbo/
+coverage/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and logs
+.idea/
+*.log
