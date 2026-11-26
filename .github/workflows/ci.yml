@@ -91,6 +91,9 @@ jobs:
       - name: CRM and jobs
         run: pnpm test:crm
 
+      - name: Takeoff and measurements
+        run: pnpm test:takeoff
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

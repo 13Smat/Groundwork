@@ -1,6 +1,6 @@
 # Status
 
-CRM and jobs (spec 03, part 1 of 2) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Takeoff and measurements (spec 04, part 1 of 3) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -13,7 +13,8 @@ CRM and jobs (spec 03, part 1 of 2) is the current slice. Owner: Andy Silver. Th
 - `Job.stage` lives in `packages/shared`. Illegal transitions and a won without `jobs.force_won` return 409 problem+json. That token is on owner and admin only. Every stage change writes `audit_log`.
 - Fixture geocoder and parcel adapters. No network and no API keys. Parcel hits are cached in `parcel_cache`. The first job number in a workspace is `J-1001`.
 - Fastify routes for clients, contacts, locations, resolve, jobs, transitions, notes, tasks, presigned files, search, and the pipeline summary. Creating a client warns on a duplicate email or phone and still creates the row.
-- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, and CRM tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. An `e2e` job runs Playwright. Scripts that load the API build its workspace dependencies first. There is no CRM UI in this slice.
+- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, and takeoff tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. An `e2e` job runs Playwright. Scripts that load the API build its workspace dependencies first. There is no CRM UI in this slice.
+- Takeoff measurements are migration `0009_takeoff.sql`. `takeoff` and `measurement` force row security and reference the `takeoff_item` table from `0006`. ADR 0013. `Takeoff.status` is `draft -> in_review -> final`, and `final -> draft` inserts the next version. PostGIS geography is the stored area and length. Turf in `packages/geo` is the live-feedback helper. A source with `allows_tracing = false` or a null `verified_at` is 403. A capture that is not `ready` is 409.
 
 ## Not in this slice
 
@@ -26,7 +27,9 @@ CRM and jobs (spec 03, part 1 of 2) is the current slice. Owner: Andy Silver. Th
 - `output_unit`. The column is `input_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - A county boundary table. A county FIPS is accepted, and the raster footprint is not checked against a county polygon.
 - A live NC or NAIP download in CI. The fetcher exists and stays off.
-- Takeoff drawing and proposal PDF attribution.
+- The takeoff map editor, PNG export, undo/redo, and proposal PDF attribution. This slice is the API and the PostGIS tests.
+- `sheet_geom`, `planset_sheet`, and plan-set scale. Spec 12 owns those. A measurement in this slice is geographic.
+- AI assist and AI auto drawing. The `source` values exist. Nothing writes them yet.
 - Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
 - A browser-facing signed tile URL. Imagery still proxies.
 - CRM screens. This is the API half of spec 03.

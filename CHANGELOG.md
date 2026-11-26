@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Spec 04 part 1 — Takeoff and measurement model
+
+- Added `0009_takeoff.sql` for `takeoff` and `measurement`. Tenant row security is forced. `groundwork_app` is the only grantee. `takeoff_item` from `0006` is referenced and is not recreated. ADR 0013.
+- `Takeoff.status` lives in `packages/shared`. `draft -> in_review -> final`. `final -> draft` inserts version n+1, copies measurements, and leaves the old row read-only. Any other change is 409.
+- Extended `packages/geo` with Turf geodesic area, length, and rectangle helpers. Display rounding uses the existing integer ratios and `decimal.js`: ft² to 1, yd² to 0.1, ft to 1, acres to 0.001. Stored `value_m2` and `value_m` stay `numeric(14,4)`.
+- Added takeoff and measurement routes. Creating an aerial takeoff is 403 when the source has `allows_tracing = false` or `verified_at` is null, and 409 when the capture is not `ready`. Changing the capture after measurements exist requires `confirm: true`. Bulk PUT upserts by client id, recomputes geography area and length, reports a self-intersection correction, and flags same-item overlaps. The summary returns the sum and the union per takeoff item.
+- CI runs `pnpm test:takeoff` in the `db` job. The PostGIS tests cover the latitude sweep, the 20 ft hole, geodesic length, a 500-feature save, the summary, the imagery 403, and cross-tenant row security.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Ticket 03 — CRM and jobs API
 
 - Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0009. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.

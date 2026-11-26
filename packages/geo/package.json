@@ -12,6 +12,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.build.json"
   },
+  "dependencies": {
+    "@turf/area": "7.4.0",
+    "@turf/destination": "7.4.0",
+    "@turf/helpers": "7.4.0",
+    "@turf/length": "7.4.0",
+    "decimal.js": "10.6.0"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^5.1.2"

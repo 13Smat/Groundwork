@@ -72,6 +72,13 @@ const TENANT_ROUTES = [
   "post /jobs/{id}/files",
   "get /search",
   "get /pipeline/summary",
+  "post /jobs/{id}/takeoffs",
+  "get /takeoffs/{id}",
+  "patch /takeoffs/{id}",
+  "get /takeoffs/{id}/measurements",
+  "put /takeoffs/{id}/measurements",
+  "delete /measurements/{id}",
+  "get /takeoffs/{id}/summary",
 ];
 
 type Session = { cookie: string; email: string };
@@ -276,6 +283,16 @@ function tenantPayload(
       return { title: "task" };
     case "post /jobs/{id}/files":
       return { mime: "image/png" };
+    case "post /jobs/{id}/takeoffs":
+      return {
+        kind: "aerial",
+        location_id: createId(),
+        imagery_capture_id: createId(),
+      };
+    case "patch /takeoffs/{id}":
+      return { status: "in_review" };
+    case "put /takeoffs/{id}/measurements":
+      return { features: [] };
     case "post /imagery/ingest":
       return { sourceId: createId(), year: 2026, countyFips: "37023" };
     case "post /admin/imagery-sources":
@@ -667,7 +684,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|takeoffs|measurements|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {

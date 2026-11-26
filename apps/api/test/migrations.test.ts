@@ -11,6 +11,7 @@ describe("migration files", () => {
       "0004_imagery_ingest.sql",
       "0005_crm_jobs.sql",
       "0006_catalog_recipes.sql",
+      "0009_takeoff.sql",
     ]);
   });
 });
