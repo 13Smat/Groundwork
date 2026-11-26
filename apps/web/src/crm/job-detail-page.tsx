@@ -10,6 +10,7 @@ import { SiteMap } from "./site-map";
 import { StageMove } from "./stage-move";
 import type { ActivityEvent, Job, JobFile, Location, Note, Task } from "./types";
 import { takeWarnings } from "./warnings";
+import { JobEstimates } from "../estimate/job-estimates";
 import { TakeoffsPanel } from "../takeoff/start";
 import { useMembers, useWorkspace } from "./workspace";
 
@@ -19,6 +20,7 @@ const TABS = [
   { id: "notes", label: "Notes and tasks" },
   { id: "activity", label: "Activity" },
   { id: "takeoffs", label: "Takeoffs" },
+  { id: "estimates", label: "Estimates" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -190,7 +192,11 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
             </Link>
           </li>
           <li>
-            <Link to="/estimates" className="text-base font-semibold underline">
+            <Link
+              to="/jobs/$jobId/estimates"
+              params={{ jobId }}
+              className="text-base font-semibold underline"
+            >
               Estimates
             </Link>
           </li>
@@ -224,6 +230,11 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
       {tab === "takeoffs" ? (
         <div role="tabpanel" id="panel-takeoffs" aria-labelledby="tab-takeoffs" tabIndex={0}>
           <TakeoffsPanel jobId={jobId} />
+        </div>
+      ) : null}
+      {tab === "estimates" ? (
+        <div role="tabpanel" id="panel-estimates" aria-labelledby="tab-estimates" tabIndex={0}>
+          <JobEstimates jobId={jobId} />
         </div>
       ) : null}
     </div>

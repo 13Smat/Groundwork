@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Spec 07 part 2 — Quantity sync, versions, and the estimate editor
+
+- `GET /estimates/:id/quantity-diff` lists added, removed, and changed takeoff items with the old and new quantity in the item's default unit. The new quantity is the newest takeoff in the lineage, including after `final -> draft` clones a row. A non-draft returns 409. ADR 0019. No new migration.
+- `POST /estimates/:id/apply-quantities` updates only the accepted lines, appends items that were added, deletes lines for items that were removed, and sums totals again. Other lines keep their `updated_at`. The estimate then points at the lineage head. A non-draft returns 409.
+- `POST /estimates/:id/versions` copies the estimate as the next version in draft. `ready` and `sent` become `superseded`. A draft stays a draft. The previous snapshot is not rewritten. `GET /jobs/:id/estimates` lists the versions without cost or margin.
+- The job page links to the estimate editor. Lines are grouped by takeoff item. Variable overrides, a manual line, and the optional toggle save through the existing line routes. Flagged lines warn that ready is blocked. The totals panel hides cost and margin without `catalog.manage`. Sync and versions are a dialog and a drawer. Mark ready uses the existing transition.
+- Mutations write `audit_log` without cost or margin. Playwright covers create, override, a manual line, the optional toggle, the sync dialog, a new version, and mark ready. The spec files were not edited.
+
 ### Spec 04 part 2 — Takeoff editor
 
 - The job page has a Takeoffs tab. New takeoff creates an aerial takeoff on the first license-cleared capture and opens `/jobs/$jobId/takeoffs/$takeoffId`. The editor is loaded lazily so MapLibre and Terra Draw stay out of the office bundle. `/catalog/takeoff` is still the takeoff-item screen. ADR 0014.
