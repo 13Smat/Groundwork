@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Spec 05 part 2 — Assist acceptance in the editor
+
+- `GET /detections/:id`, `POST /detections/:id/accept`, and `POST /detections/:id/reject` review a succeeded run. Accept inserts area measurements with `source = ai_assist` and leaves every other measurement as it was. A review that keeps every draft is `accepted_all`. A review that leaves any draft, including discarding all of them, is `accepted_partial`. A second review is 409. Each mutation writes one `audit_log` row. ADR 0018. No new migration: `0012` already has the statuses and `accepted_measurement_id`.
+- The editor shows Assist, positive and negative points, a box drag, a working state, a dashed draft layer, and Accept / Refine / Discard when `workspace.features.ai_assist` is true. The controls are absent when it is false. The API still requires `GROUNDWORK_AI_ASSIST=1`. Refine starts a new assist request and rejects the previous run. Accept loads the new measurement on the existing map.
+- `pnpm test:takeoff` covers accept, reject, the state machine, and a cross-tenant 404. Playwright covers the hidden controls and prompt, refine, accept, then a vertex edit, using the mock CV service. The e2e job installs the CV and imagery venvs and starts the mock. No model is downloaded.
+- Hole cut and undo/redo on an accepted polygon wait for the map follow-up. This slice checks the vertex edit and the server summary.
+
 ### Spec 04 part 2 — Takeoff editor
 
 - The job page has a Takeoffs tab. New takeoff creates an aerial takeoff on the first license-cleared capture and opens `/jobs/$jobId/takeoffs/$takeoffId`. The editor is loaded lazily so MapLibre and Terra Draw stay out of the office bundle. `/catalog/takeoff` is still the takeoff-item screen. ADR 0014.
