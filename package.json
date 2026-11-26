@@ -12,8 +12,12 @@
     "lint": "eslint . && prettier --check .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run build --filter=@groundwork/shared && vitest run",
+    "test:rls": "turbo run build --filter=@groundwork/shared && vitest run --config vitest.rls.config.ts",
     "build": "turbo run build",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "db:migrate": "pnpm --filter @groundwork/api db:migrate",
+    "db:migrate:down": "pnpm --filter @groundwork/api db:migrate:down",
+    "worker": "pnpm --filter @groundwork/api worker",
     "format": "prettier --write ."
   },
   "pnpm": {
@@ -27,6 +31,7 @@
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "happy-dom": "^21.0.4",
     "prettier": "^3.10.1",
     "turbo": "^2.11.13",
     "typescript": "^5.9.3",

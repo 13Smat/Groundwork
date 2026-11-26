@@ -6,14 +6,16 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import type { Logger } from "pino";
 import { z } from "zod/v4";
 
 import { registerProblemHandlers } from "./errors.js";
+import { createLogger } from "./logging.js";
 
-export async function buildApp(options?: { logger?: boolean }) {
-  const app = Fastify({
-    logger: options?.logger ?? false,
-  }).withTypeProvider<ZodTypeProvider>();
+export async function buildApp(options?: { logger?: boolean | Logger }) {
+  const logger =
+    options?.logger === true ? createLogger("api") : options?.logger ? options.logger : false;
+  const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

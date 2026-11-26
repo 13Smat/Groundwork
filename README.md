@@ -18,11 +18,14 @@ Node 24 (see `.nvmrc`) and the pnpm version in `package.json` `packageManager`.
 
 ```bash
 pnpm install
-pnpm check
+docker compose up -d
+pnpm db:migrate
 pnpm dev
 ```
 
-`pnpm check` lints, typechecks, tests, and builds. `pnpm dev` starts the office app and the API. Postgres, object storage, and the Python services are not part of this slice.
+`pnpm check` lints, typechecks, tests, and builds. `docker compose up -d` starts local PostGIS, MinIO, Mailpit, and a TiTiler placeholder. `pnpm db:migrate` applies SQL migrations. `pnpm dev` starts the office app and the API against that Postgres and MinIO. Outside production, empty database and S3 variables use the local compose defaults. Set `NODE_ENV=production` only with real values in an untracked `.env`.
+
+`pnpm worker` starts the pg-boss process. `pnpm test:rls` runs the tenant-isolation tests and needs the database.
 
 ## For agents
 

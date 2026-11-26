@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod/v4";
 
 import { buildApp } from "../src/app.js";
+import { ProblemError } from "../src/errors.js";
 
 describe("HTTP", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -20,6 +21,13 @@ describe("HTTP", () => {
       },
       async (request) => ({ name: request.body.name }),
     );
+    app.get("/conflict", async () => {
+      throw new ProblemError({
+        status: 409,
+        title: "Conflict",
+        detail: "The transition is not allowed.",
+      });
+    });
   });
 
   afterAll(async () => {
@@ -81,5 +89,19 @@ describe("HTTP", () => {
     expect(body.type).toBe("about:blank");
     expect(body.errors?.length).toBeGreaterThan(0);
     expect(body.errors?.[0]?.message).toEqual(expect.any(String));
+  });
+
+  it("returns the problem thrown by a route", async () => {
+    const response = await app.inject({ method: "GET", url: "/conflict" });
+    const body = problemSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(409);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
+    expect(body).toMatchObject({
+      title: "Conflict",
+      status: 409,
+      detail: "The transition is not allowed.",
+      instance: "/conflict",
+    });
   });
 });

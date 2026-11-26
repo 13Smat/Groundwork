@@ -14,8 +14,9 @@ export function isUuidV7(value: string): boolean {
 }
 
 /**
- * Format a human number. The sequence start (the spec's `1001` examples) belongs to the
- * counters table, which is still an open question. This only formats a positive integer.
+ * Format a human number. The counters table stores the sequence. The start value
+ * (the spec's `1001` examples) is still an open question, so this only formats a
+ * positive integer.
  */
 export function formatHumanNumber(prefix: HumanNumberPrefix, sequence: number): string {
   const parsedPrefix = humanNumberPrefixSchema.parse(prefix);

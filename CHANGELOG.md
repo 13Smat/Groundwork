@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Ticket 2 — Local infra, database, and office shell
+
+- Added `docker-compose.yml` for PostGIS `16-3.4`, MinIO (built from the GitHub release because Docker Hub no longer serves the image), bucket init, Mailpit `v1.34.0`, and upstream TiTiler `2.0.5` as a placeholder with no fixture COG and no `allows_tracing` gate. ADR 0005.
+- Added a SQL migration runner (`pnpm db:migrate`, idempotent, with `pnpm db:migrate:down`). The first migration enables `postgis`, `pgcrypto`, and `citext`, and creates `counters`, `file`, `event_log`, `audit_log`, and `usage_event`.
+- Tenant tables force row level security. The app role `groundwork_app` is not a superuser and does not bypass row security. `withWorkspaceContext` sets `app.workspace_id` for one transaction. RLS tests cover an unset workspace, a blank setting, and workspace A versus workspace B.
+- Added a `pg-boss` worker entrypoint, an S3/MinIO presigned upload adapter, pino redaction, and an OpenTelemetry hook that stays off until an OTLP endpoint is set.
+- Extended the existing problem+json handler with `ProblemError`. Built the office navigation shell (Radix navigation menu and dialog, arrow keys, skip link) on `@groundwork/ui`.
+- CI keeps `check` and adds a PostGIS job that migrates twice and runs the RLS tests.
+- Recorded the spec gaps this slice hit in `docs/specs/OPEN-QUESTIONS.md` and pointed them at ADR 0005. The spec files were not edited.
+
 ### Ticket 1 — Monorepo layout and CI
 
 - Pinned Node 24 LTS in ADR 0004. `.nvmrc` is `24`. `engines.node` is `>=24 <25`. `packageManager` is pnpm 10.34.9.
