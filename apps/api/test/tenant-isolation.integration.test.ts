@@ -75,6 +75,49 @@ describe("cross-tenant contract", () => {
     const listedIds = JSON.stringify(listed.body);
     expect(listedIds).not.toContain(ids.imagerySource);
     expect(listedIds).not.toContain(ids.capture);
+    const sources = (
+      listed.body as {
+        sources: Array<{ id: string; workspaceId: string | null; notes: string | null }>;
+      }
+    ).sources;
+    const globalSource = sources.find((source) => source.workspaceId === null);
+    expect(globalSource).toBeTruthy();
+    const before = await admin.query<{ notes: string | null }>(
+      "select notes from imagery_source where id = $1",
+      [globalSource?.id],
+    );
+    const patched = await app.inject({
+      method: "PATCH",
+      url: `/admin/imagery-sources/${globalSource?.id}`,
+      headers: {
+        cookie: owner.cookie,
+        "x-workspace-id": home.id,
+        "content-type": "application/json",
+        ...BROWSER,
+      },
+      payload: { notes: "tenant-owned-global" },
+    });
+    expect(patched.statusCode).toBe(404);
+    const after = await admin.query<{ notes: string | null }>(
+      "select notes from imagery_source where id = $1",
+      [globalSource?.id],
+    );
+    expect(after.rows[0]?.notes).toBe(before.rows[0]?.notes);
+
+    const created = await send("POST", "/admin/imagery-sources", owner.cookie, home.id, {
+      provider: "other",
+      name: `Tenant source ${createId()}`,
+      bands: "RGB",
+      allowsTracing: false,
+      allowsMlTraining: false,
+    });
+    const createdSource = created.body as { id: string; workspaceId: string | null; name: string };
+    expect(createdSource.workspaceId).toBe(home.id);
+    const globals = await admin.query<{ n: number }>(
+      "select count(*)::int as n from imagery_source where name = $1 and workspace_id is null",
+      [createdSource.name],
+    );
+    expect(globals.rows[0]?.n).toBe(0);
   }, 120_000);
 
   async function seedAway(cookie: string, workspaceId: string): Promise<Record<string, string>> {

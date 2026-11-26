@@ -65,3 +65,19 @@ create policy imagery_ingest_job_update on imagery_ingest_job
     workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid
     and current_setting('app.imagery_admin', true) = 'on'
   );
+
+drop policy if exists role_read on "role";
+drop policy if exists role_write on "role";
+drop policy if exists role_update on "role";
+drop policy if exists role_delete on "role";
+
+create policy tenant_isolation on "role"
+  using (
+    current_user = 'groundwork_auth'
+    or workspace_id is null
+    or workspace_id::uuid = nullif(current_setting('app.workspace_id', true), '')::uuid
+  )
+  with check (
+    current_user = 'groundwork_auth'
+    or workspace_id::uuid = nullif(current_setting('app.workspace_id', true), '')::uuid
+  );

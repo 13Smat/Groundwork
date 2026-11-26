@@ -4,6 +4,8 @@ import { Button, TextField } from "@groundwork/ui";
 
 export type ImagerySourceRow = {
   id: string;
+  /** Null on a public-program row. Those rows are readable and not editable. */
+  workspaceId?: string | null;
   provider: string;
   name: string;
   bands: string;
@@ -76,7 +78,11 @@ export function ImageryAdmin({
         </p>
       ) : null}
       <SourceTable sources={sources} />
-      <LicenseForm sources={sources} busy={busy} onSave={onSaveLicense} />
+      <LicenseForm
+        sources={sources.filter((source) => source.workspaceId !== null)}
+        busy={busy}
+        onSave={onSaveLicense}
+      />
       <IngestForm sources={sources} busy={busy} onIngest={onIngest} />
       <IngestStatus job={job} />
       <CreateSourceForm busy={busy} onCreate={onCreateSource} />

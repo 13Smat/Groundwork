@@ -126,6 +126,32 @@ describe("schema audit", () => {
     expect(lookup[0]?.qual).toContain("app.proposal_token_hash");
   });
 
+  it("rejects a write policy that matches a null workspace id", async () => {
+    const policies = await requireAdmin().query<{
+      table: string;
+      name: string;
+      cmd: string;
+      qual: string | null;
+      check: string | null;
+    }>(`
+      select tablename as table,
+             policyname as name,
+             cmd,
+             qual,
+             with_check as check
+      from pg_policies
+      where schemaname = 'public'
+        and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+    `);
+    const offenders = policies.rows.flatMap((policy) => {
+      const predicates = writePredicates(policy.cmd, policy.qual, policy.check);
+      return predicates
+        .filter((predicate) => allowsNullWorkspace(predicate) && !isOperatorWrite(predicate))
+        .map((predicate) => `${policy.cmd} ${policy.table}.${policy.name}: ${predicate}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it("has no security definer function and no bypass on the app roles", async () => {
     const functions = await requireAdmin().query<{ name: string }>(`
       select p.proname as name
@@ -227,6 +253,25 @@ async function expectGrants(table: string, owner: string): Promise<void> {
   for (const grantee of grantees) {
     expect(allowed.has(grantee), `${table} grants ${grantee}`).toBe(true);
   }
+}
+
+function writePredicates(cmd: string, qual: string | null, check: string | null): string[] {
+  if (cmd === "INSERT") {
+    return check ? [check] : [];
+  }
+  if (cmd === "DELETE") {
+    return qual ? [qual] : [];
+  }
+  return [qual, check].filter((predicate): predicate is string => predicate !== null);
+}
+
+function allowsNullWorkspace(predicate: string): boolean {
+  const withoutNegation = predicate.replace(/workspace_id\s+is\s+not\s+null/gi, "");
+  return /workspace_id\s+is\s+null/i.test(withoutNegation);
+}
+
+function isOperatorWrite(predicate: string): boolean {
+  return predicate.includes("app.platform_operator");
 }
 
 function quote(name: string): string {
