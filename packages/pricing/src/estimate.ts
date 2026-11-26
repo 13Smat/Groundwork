@@ -1,4 +1,9 @@
-import { conversionRatio, measureKindOfUnit, type MeasureKind } from "@groundwork/geo";
+import {
+  conversionRatio,
+  measureKindOfUnit,
+  normalizeUnit,
+  type MeasureKind,
+} from "@groundwork/geo";
 import { Decimal } from "decimal.js";
 
 import { formatDecimal, roundHalfEvenCents } from "./formula.js";
@@ -115,6 +120,24 @@ export function defaultTaxCode(kind: string, taxCode: string | null | undefined)
     return "materials";
   }
   return kind;
+}
+
+export function canonicalUnit(kind: MeasureKind): string {
+  return CANONICAL_UNIT[kind];
+}
+
+/**
+ * Convert a quantity between two units of the same measure kind.
+ * Identical units (including aliases such as yd² and yd2) keep the value.
+ */
+export function convertQuantity(qty: string, from: string, to: string): string {
+  const source = normalizeUnit(from);
+  const target = normalizeUnit(to);
+  if (source !== null && source === target) {
+    return formatDecimal(new D(qty));
+  }
+  const ratio = conversionRatio(from, to);
+  return formatDecimal(new D(qty).mul(ratio.numerator).div(ratio.denominator));
 }
 
 export function sumQuantities(values: readonly string[]): string {

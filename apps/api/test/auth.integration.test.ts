@@ -84,7 +84,11 @@ const TENANT_ROUTES = [
   "post /takeoffs/{id}/assist",
   "get /takeoffs/{id}/summary",
   "post /jobs/{id}/estimates",
+  "get /jobs/{id}/estimates",
   "get /estimates/{id}",
+  "get /estimates/{id}/quantity-diff",
+  "post /estimates/{id}/apply-quantities",
+  "post /estimates/{id}/versions",
   "patch /estimates/{id}",
   "post /estimates/{id}/lines",
   "post /estimates/{id}/recalculate",
@@ -314,6 +318,10 @@ function tenantPayload(
         points: [{ lng: -81.7, lat: 35.75, label: 1 }],
       };
     case "post /jobs/{id}/estimates":
+      return {};
+    case "post /estimates/{id}/apply-quantities":
+      return {};
+    case "post /estimates/{id}/versions":
       return {};
     case "patch /estimates/{id}":
       return { notes: "no" };

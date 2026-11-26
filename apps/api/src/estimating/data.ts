@@ -1,5 +1,7 @@
 import type { MeasureKind } from "@groundwork/geo";
 import {
+  canonicalUnit,
+  convertQuantity,
   extendCents,
   isMaterialsTaxCode,
   linesFromGroups,
@@ -11,6 +13,7 @@ import {
   roundQty,
   summarizeLines,
   sumQuantities,
+  takeoffQuantityForRecipe,
   unitCentsFromExtended,
   type EstimateRates,
   type EstimateTotals,
@@ -67,6 +70,8 @@ export type LineView = {
   price_overridden: boolean;
   measurement_ids: string[];
   sort: number;
+  /** Recipe defaults. Overrides stay on `variables`. Manual lines are empty. */
+  recipe_variables: Record<string, string>;
   created_at: string;
   updated_at: string;
 };
@@ -159,6 +164,9 @@ function rethrowEstimate(error: unknown): never {
   const text = errorText(error);
   if (text.includes("flagged lines block ready")) {
     throw conflict("A flagged or unresolved line blocks ready.");
+  }
+  if (text.includes("estimate_workspace_id_number_version")) {
+    throw conflict("That estimate version already exists.");
   }
   if (text.includes("illegal estimate transition")) {
     throw conflict("That estimate status change is not allowed.");
@@ -393,7 +401,7 @@ function requireDraft(status: string): void {
   }
 }
 
-function viewLine(row: LineRow): LineView {
+function viewLine(row: LineRow, recipeVariables: Record<string, string>): LineView {
   const price = BigInt(row.price_cents);
   const cost = BigInt(row.cost_cents);
   return {
@@ -426,12 +434,17 @@ function viewLine(row: LineRow): LineView {
     price_overridden: row.price_overridden,
     measurement_ids: asUuidArray(row.measurement_ids),
     sort: row.sort,
+    recipe_variables: recipeVariables,
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };
 }
 
-function viewEstimate(row: EstimateRow, lines: LineRow[]): EstimateView {
+function viewEstimate(
+  row: EstimateRow,
+  lines: LineRow[],
+  recipes: ReadonlyMap<string, Record<string, string>>,
+): EstimateView {
   if (!isEstimateStatus(row.status)) {
     throw new ProblemError({
       status: 500,
@@ -467,7 +480,7 @@ function viewEstimate(row: EstimateRow, lines: LineRow[]): EstimateView {
     cost_cents: cents(totals.costCents),
     margin_cents: cents(totals.marginCents),
     margin_pct: totals.marginPct,
-    lines: lines.map(viewLine),
+    lines: lines.map((line) => viewLine(line, recipeDefaults(recipes, line.recipe_id))),
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };
@@ -485,12 +498,43 @@ function parseSnapshot(value: unknown): EstimateView {
   return body as EstimateView;
 }
 
+async function recipeVariableMap(
+  trx: Trx,
+  lines: readonly LineRow[],
+): Promise<Map<string, Record<string, string>>> {
+  const ids = [...new Set(lines.flatMap((line) => (line.recipe_id ? [line.recipe_id] : [])))];
+  const map = new Map<string, Record<string, string>>();
+  if (ids.length === 0) {
+    return map;
+  }
+  const rows = await trx
+    .selectFrom("cost_recipe")
+    .select(["id", "variables"])
+    .where("id", "in", ids)
+    .execute();
+  for (const row of rows) {
+    map.set(row.id, asVariables(row.variables));
+  }
+  return map;
+}
+
+function recipeDefaults(
+  recipes: ReadonlyMap<string, Record<string, string>>,
+  recipeId: string | null,
+): Record<string, string> {
+  if (!recipeId) {
+    return {};
+  }
+  return recipes.get(recipeId) ?? {};
+}
+
 async function fullView(trx: Trx, id: string): Promise<EstimateView> {
   const row = await loadEstimate(trx, id);
   if (!row) {
     throw notFound("That estimate was not found.");
   }
-  return viewEstimate(row, await loadLines(trx, id));
+  const lines = await loadLines(trx, id);
+  return viewEstimate(row, lines, await recipeVariableMap(trx, lines));
 }
 
 async function writeTotals(trx: Trx, id: string, totals: EstimateTotals): Promise<void> {
@@ -646,8 +690,9 @@ async function insertPricedLines(
   workspaceId: string,
   estimateId: string,
   lines: readonly PricedLine[],
+  sortStart = 0,
 ): Promise<void> {
-  let sort = 0;
+  let sort = sortStart;
   for (const line of lines) {
     await trx
       .insertInto("line_item")
@@ -985,7 +1030,8 @@ export async function getEstimate(trx: Trx, id: string): Promise<EstimateView> {
       updated_at: iso(row.updated_at),
     };
   }
-  return viewEstimate(row, await loadLines(trx, id));
+  const lines = await loadLines(trx, id);
+  return viewEstimate(row, lines, await recipeVariableMap(trx, lines));
 }
 
 export async function patchEstimate(
@@ -1463,7 +1509,7 @@ export async function transitionEstimateStatus(
       throw error;
     }
     if (result.freezeSnapshot) {
-      const frozen = viewEstimate(estimate, lines);
+      const frozen = viewEstimate(estimate, lines, await recipeVariableMap(trx, lines));
       frozen.status = result.status;
       await trx
         .updateTable("estimate")
@@ -1493,4 +1539,582 @@ export async function transitionEstimateStatus(
     });
     return getEstimate(trx, estimate.id);
   });
+}
+
+export type QuantityChange = {
+  change: "added" | "removed" | "changed";
+  takeoff_item_id: string;
+  name: string;
+  unit: string;
+  old_qty: string | null;
+  new_qty: string | null;
+};
+
+export type QuantityDiff = {
+  estimate_id: string;
+  takeoff_id: string | null;
+  compared_takeoff_id: string | null;
+  compared_takeoff_version: number | null;
+  items: QuantityChange[];
+};
+
+export type EstimateSummary = {
+  id: string;
+  job_id: string;
+  takeoff_id: string | null;
+  number: string;
+  version: number;
+  status: EstimateStatus;
+  total_cents: number;
+  updated_at: string;
+};
+
+type TakeoffQty = {
+  id: string;
+  name: string;
+  measureKind: MeasureKind;
+  canonicalQty: string;
+  qty: string;
+  unit: string;
+  measurementIds: string[];
+};
+
+type StoredQty = {
+  id: string;
+  name: string;
+  qty: string;
+  unit: string;
+};
+
+function draftOnly(status: string): void {
+  if (status !== "draft") {
+    throw conflict("Quantity sync is available on a draft. Clone a new version first.");
+  }
+}
+
+function inUnit(qty: string, from: string, to: string): string | undefined {
+  try {
+    return convertQuantity(qty, from, to);
+  } catch {
+    return undefined;
+  }
+}
+
+function qtyChanged(left: string, right: string): boolean {
+  try {
+    return roundQty(left) !== roundQty(right);
+  } catch {
+    return left !== right;
+  }
+}
+
+async function comparedTakeoff(
+  trx: Trx,
+  takeoffId: string | null,
+): Promise<{ id: string; version: number } | undefined> {
+  if (!takeoffId) {
+    return undefined;
+  }
+  const row = await trx
+    .selectFrom("takeoff")
+    .select(["lineage_id"])
+    .where("id", "=", takeoffId)
+    .executeTakeFirst();
+  if (!row) {
+    return undefined;
+  }
+  return trx
+    .selectFrom("takeoff")
+    .select(["id", "version"])
+    .where("lineage_id", "=", row.lineage_id)
+    .orderBy("version", "desc")
+    .orderBy("id", "desc")
+    .executeTakeFirst();
+}
+
+async function loadCurrentItems(trx: Trx, takeoffId: string): Promise<TakeoffQty[]> {
+  const measurements = await trx
+    .selectFrom("measurement")
+    .select(["id", "takeoff_item_id", "kind", "value_m2", "value_m", "count"])
+    .where("takeoff_id", "=", takeoffId)
+    .execute();
+  if (measurements.length === 0) {
+    return [];
+  }
+  const itemIds = [...new Set(measurements.map((row) => row.takeoff_item_id))];
+  const items = await trx
+    .selectFrom("takeoff_item")
+    .selectAll()
+    .where("id", "in", itemIds)
+    .execute();
+  const quantities: TakeoffQty[] = [];
+  for (const item of items) {
+    const kind = measureKind(item.measure_kind);
+    const mine = measurements.filter((row) => row.takeoff_item_id === item.id && row.kind === kind);
+    if (mine.length === 0) {
+      continue;
+    }
+    const canonicalQty = sumQuantities(
+      mine.map((row) => {
+        if (kind === "area") {
+          return row.value_m2 ?? "0";
+        }
+        if (kind === "length") {
+          return row.value_m ?? "0";
+        }
+        return String(row.count ?? 0);
+      }),
+    );
+    let qty = canonicalQty;
+    let unit = canonicalUnit(kind);
+    try {
+      qty = takeoffQuantityForRecipe(kind, canonicalQty, item.default_unit);
+      unit = item.default_unit;
+    } catch {
+      // The item's display unit is not a measure unit. Keep metres or count.
+    }
+    quantities.push({
+      id: item.id,
+      name: item.name,
+      measureKind: kind,
+      canonicalQty,
+      qty,
+      unit,
+      measurementIds: mine.map((row) => row.id),
+    });
+  }
+  return quantities;
+}
+
+async function storedQuantities(
+  trx: Trx,
+  lines: readonly LineRow[],
+): Promise<Map<string, StoredQty>> {
+  const ids = [
+    ...new Set(lines.flatMap((line) => (line.takeoff_item_id ? [line.takeoff_item_id] : []))),
+  ];
+  const map = new Map<string, StoredQty>();
+  if (ids.length === 0) {
+    return map;
+  }
+  const items = await trx
+    .selectFrom("takeoff_item")
+    .select(["id", "name", "default_unit"])
+    .where("id", "in", ids)
+    .execute();
+  const byId = new Map(items.map((item) => [item.id, item]));
+  for (const id of ids) {
+    const group = lines.filter((line) => line.takeoff_item_id === id);
+    const source = group.find((line) => line.input_qty !== null) ?? group[0];
+    const item = byId.get(id);
+    if (!source) {
+      continue;
+    }
+    const name = item?.name ?? source.grp ?? "Takeoff item";
+    const fromQty = source.input_qty ?? String(source.qty);
+    const fromUnit = source.input_unit ?? source.unit;
+    const preferred = item?.default_unit;
+    if (preferred) {
+      const converted = inUnit(fromQty, fromUnit, preferred);
+      if (converted !== undefined) {
+        map.set(id, { id, name, qty: converted, unit: preferred });
+        continue;
+      }
+    }
+    map.set(id, { id, name, qty: fromQty, unit: fromUnit });
+  }
+  return map;
+}
+
+async function buildQuantityDiff(trx: Trx, estimate: EstimateRow): Promise<QuantityDiff> {
+  const lines = await loadLines(trx, estimate.id);
+  const compared = await comparedTakeoff(trx, estimate.takeoff_id);
+  const current = compared ? await loadCurrentItems(trx, compared.id) : [];
+  const stored = await storedQuantities(trx, lines);
+  const currentById = new Map(current.map((item) => [item.id, item]));
+  const ids = new Set([...stored.keys(), ...currentById.keys()]);
+  const items: QuantityChange[] = [];
+  for (const id of ids) {
+    const oldItem = stored.get(id);
+    const next = currentById.get(id);
+    if (oldItem && next) {
+      const converted = inUnit(oldItem.qty, oldItem.unit, next.unit);
+      const oldQty = converted ?? oldItem.qty;
+      const unit = converted === undefined ? oldItem.unit : next.unit;
+      const newQty =
+        converted === undefined
+          ? (inUnit(next.qty, next.unit, oldItem.unit) ?? next.qty)
+          : next.qty;
+      if (!qtyChanged(oldQty, newQty)) {
+        continue;
+      }
+      items.push({
+        change: "changed",
+        takeoff_item_id: id,
+        name: next.name,
+        unit,
+        old_qty: oldQty,
+        new_qty: newQty,
+      });
+    } else if (next) {
+      items.push({
+        change: "added",
+        takeoff_item_id: id,
+        name: next.name,
+        unit: next.unit,
+        old_qty: null,
+        new_qty: next.qty,
+      });
+    } else if (oldItem) {
+      items.push({
+        change: "removed",
+        takeoff_item_id: id,
+        name: oldItem.name,
+        unit: oldItem.unit,
+        old_qty: oldItem.qty,
+        new_qty: null,
+      });
+    }
+  }
+  const rank = { added: 0, changed: 1, removed: 2 } as const;
+  items.sort(
+    (left, right) =>
+      rank[left.change] - rank[right.change] ||
+      left.name.localeCompare(right.name) ||
+      left.takeoff_item_id.localeCompare(right.takeoff_item_id),
+  );
+  return {
+    estimate_id: estimate.id,
+    takeoff_id: estimate.takeoff_id,
+    compared_takeoff_id: compared?.id ?? null,
+    compared_takeoff_version: compared?.version ?? null,
+    items,
+  };
+}
+
+async function syncChangedLine(
+  trx: Trx,
+  line: LineRow,
+  item: TakeoffQty,
+  rates: EstimateRates,
+): Promise<void> {
+  let inputQty = item.canonicalQty;
+  let inputUnit = line.input_unit;
+  let convertible = true;
+  if (line.input_unit) {
+    try {
+      inputQty = takeoffQuantityForRecipe(item.measureKind, item.canonicalQty, line.input_unit);
+    } catch {
+      convertible = false;
+      inputUnit = null;
+    }
+  } else {
+    try {
+      inputQty = takeoffQuantityForRecipe(item.measureKind, item.canonicalQty, line.unit);
+    } catch {
+      inputQty = item.canonicalQty;
+    }
+  }
+  const measurementIds = uuidArray(item.measurementIds);
+  if (!convertible || line.recipe_component_id === null) {
+    await trx
+      .updateTable("line_item")
+      .set({
+        qty: roundQty(inputQty),
+        input_qty: inputQty,
+        input_unit: inputUnit,
+        measurement_ids: measurementIds,
+        flagged: true,
+        unit_price_cents: "0",
+        cost_cents: "0",
+        price_cents: "0",
+        tax_cents: "0",
+      })
+      .where("id", "=", line.id)
+      .execute();
+    return;
+  }
+  const next = await moneyFromFormula(
+    trx,
+    { ...line, input_qty: inputQty, input_unit: inputUnit },
+    rates,
+  );
+  await trx
+    .updateTable("line_item")
+    .set({
+      qty: roundQty(next.qty),
+      unit_cost_cents: next.unit_cost_cents,
+      unit_price_cents: next.unit_price_cents,
+      cost_cents: next.cost_cents,
+      price_cents: next.price_cents,
+      tax_cents: next.tax_cents,
+      input_qty: inputQty,
+      input_unit: inputUnit,
+      measurement_ids: measurementIds,
+      flagged: next.flagged,
+    })
+    .where("id", "=", line.id)
+    .execute();
+}
+
+export async function quantityDiff(trx: Trx, estimateId: string): Promise<QuantityDiff> {
+  return run(async () => {
+    const estimate = await loadEstimate(trx, estimateId);
+    if (!estimate) {
+      throw notFound("That estimate was not found.");
+    }
+    draftOnly(estimate.status);
+    return buildQuantityDiff(trx, estimate);
+  });
+}
+
+export async function applyQuantities(
+  trx: Trx,
+  input: {
+    workspaceId: string;
+    memberId: string;
+    estimateId: string;
+    takeoffItemIds?: readonly string[] | undefined;
+  },
+): Promise<EstimateView> {
+  return run(async () => {
+    const estimate = await loadEstimate(trx, input.estimateId);
+    if (!estimate) {
+      throw notFound("That estimate was not found.");
+    }
+    draftOnly(estimate.status);
+    const diff = await buildQuantityDiff(trx, estimate);
+    const wanted = input.takeoffItemIds;
+    if (wanted) {
+      const known = new Set(diff.items.map((item) => item.takeoff_item_id));
+      for (const id of wanted) {
+        if (!known.has(id)) {
+          throw badRequest("That takeoff item is not in the quantity diff.");
+        }
+      }
+    }
+    const selected = wanted
+      ? diff.items.filter((item) => wanted.includes(item.takeoff_item_id))
+      : diff.items;
+    if (selected.length === 0) {
+      return fullView(trx, estimate.id);
+    }
+    const current = diff.compared_takeoff_id
+      ? await loadCurrentItems(trx, diff.compared_takeoff_id)
+      : [];
+    const byId = new Map(current.map((item) => [item.id, item]));
+    const rates = ratesOf(estimate);
+    const lines = await loadLines(trx, estimate.id);
+    for (const change of selected) {
+      if (change.change !== "removed") {
+        continue;
+      }
+      await trx
+        .deleteFrom("line_item")
+        .where("estimate_id", "=", estimate.id)
+        .where("takeoff_item_id", "=", change.takeoff_item_id)
+        .execute();
+    }
+    for (const change of selected) {
+      if (change.change !== "changed") {
+        continue;
+      }
+      const item = byId.get(change.takeoff_item_id);
+      if (!item) {
+        throw conflict("That takeoff item changed before the sync was applied.");
+      }
+      for (const line of lines) {
+        if (line.takeoff_item_id !== item.id) {
+          continue;
+        }
+        await syncChangedLine(trx, line, item, rates);
+      }
+    }
+    const added = selected.filter((change) => change.change === "added");
+    if (added.length > 0) {
+      if (!diff.compared_takeoff_id) {
+        throw conflict("That takeoff item changed before the sync was applied.");
+      }
+      const ids = new Set(added.map((change) => change.takeoff_item_id));
+      const generated = (await generateLines(trx, diff.compared_takeoff_id, rates)).filter(
+        (line) => line.takeoffItemId !== null && ids.has(line.takeoffItemId),
+      );
+      await insertPricedLines(
+        trx,
+        input.workspaceId,
+        estimate.id,
+        generated,
+        await nextSort(trx, estimate.id),
+      );
+    }
+    if (diff.compared_takeoff_id && diff.compared_takeoff_id !== estimate.takeoff_id) {
+      await trx
+        .updateTable("estimate")
+        .set({ takeoff_id: diff.compared_takeoff_id })
+        .where("id", "=", estimate.id)
+        .execute();
+    }
+    await persistTotals(trx, estimate.id);
+    await audit(trx, {
+      workspaceId: input.workspaceId,
+      actorId: input.memberId,
+      entityType: "estimate",
+      entityId: estimate.id,
+      action: "apply_quantities",
+      diff: {
+        compared_takeoff_id: diff.compared_takeoff_id,
+        items: selected.map((item) => ({
+          change: item.change,
+          takeoff_item_id: item.takeoff_item_id,
+          unit: item.unit,
+          old_qty: item.old_qty,
+          new_qty: item.new_qty,
+        })),
+      },
+    });
+    return fullView(trx, estimate.id);
+  });
+}
+
+export async function cloneEstimateVersion(
+  trx: Trx,
+  input: { workspaceId: string; memberId: string; estimateId: string },
+): Promise<EstimateView> {
+  return run(async () => {
+    const estimate = await loadEstimate(trx, input.estimateId);
+    if (!estimate || !isEstimateStatus(estimate.status)) {
+      throw notFound("That estimate was not found.");
+    }
+    const locked = await sql<{ version: number }>`
+      select version from estimate
+      where workspace_id = ${input.workspaceId}::uuid and number = ${estimate.number}
+      for update
+    `.execute(trx);
+    const version = locked.rows.reduce((max, row) => Math.max(max, Number(row.version)), 0) + 1;
+    const id = createId();
+    await trx
+      .insertInto("estimate")
+      .values({
+        id,
+        workspace_id: input.workspaceId,
+        job_id: estimate.job_id,
+        takeoff_id: estimate.takeoff_id,
+        number: estimate.number,
+        version,
+        status: "draft",
+        markup_pct: String(estimate.markup_pct),
+        overhead_pct: String(estimate.overhead_pct),
+        tax_rate: String(estimate.tax_rate),
+        subtotal_cents: "0",
+        tax_cents: "0",
+        total_cents: "0",
+        optional_subtotal_cents: "0",
+        optional_tax_cents: "0",
+        optional_total_cents: "0",
+        snapshot: null,
+        notes: estimate.notes,
+        created_by: input.memberId,
+      })
+      .execute();
+    const lines = await loadLines(trx, estimate.id);
+    for (const line of lines) {
+      await trx
+        .insertInto("line_item")
+        .values({
+          id: createId(),
+          workspace_id: input.workspaceId,
+          estimate_id: id,
+          grp: line.grp,
+          description: line.description,
+          qty: String(line.qty),
+          unit: line.unit,
+          unit_cost_cents: line.unit_cost_cents,
+          unit_price_cents: line.unit_price_cents,
+          cost_cents: line.cost_cents,
+          price_cents: line.price_cents,
+          tax_cents: line.tax_cents,
+          source: sourceOf(line.source),
+          recipe_id: line.recipe_id,
+          recipe_version: line.recipe_version,
+          recipe_component_id: line.recipe_component_id,
+          catalog_item_id: line.catalog_item_id,
+          takeoff_item_id: line.takeoff_item_id,
+          input_qty: line.input_qty,
+          input_unit: line.input_unit,
+          variables: jsonb(asVariables(line.variables)),
+          markup_pct: line.markup_pct === null ? null : String(line.markup_pct),
+          overhead_pct: line.overhead_pct === null ? null : String(line.overhead_pct),
+          tax_code: line.tax_code,
+          flagged: line.flagged,
+          optional: line.optional,
+          price_overridden: line.price_overridden,
+          measurement_ids: uuidArray(asUuidArray(line.measurement_ids)),
+          sort: line.sort,
+        })
+        .execute();
+    }
+    await persistTotals(trx, id);
+    const supersede = estimate.status === "ready" || estimate.status === "sent";
+    if (supersede) {
+      await transitionEstimateStatus(trx, {
+        workspaceId: input.workspaceId,
+        memberId: input.memberId,
+        estimateId: estimate.id,
+        to: "superseded",
+      });
+    }
+    const view = await fullView(trx, id);
+    await audit(trx, {
+      workspaceId: input.workspaceId,
+      actorId: input.memberId,
+      entityType: "estimate",
+      entityId: id,
+      action: "version",
+      diff: {
+        from_estimate_id: estimate.id,
+        number: estimate.number,
+        version,
+        superseded: supersede,
+      },
+    });
+    return view;
+  });
+}
+
+export async function listJobEstimates(
+  trx: Trx,
+  jobId: string,
+): Promise<{ estimates: EstimateSummary[] }> {
+  const job = await trx.selectFrom("job").select("id").where("id", "=", jobId).executeTakeFirst();
+  if (!job) {
+    throw notFound("That job was not found.");
+  }
+  const rows = await trx
+    .selectFrom("estimate")
+    .selectAll()
+    .where("job_id", "=", jobId)
+    .orderBy("created_at", "desc")
+    .orderBy("version", "desc")
+    .execute();
+  return {
+    estimates: rows.map((row) => {
+      if (!isEstimateStatus(row.status)) {
+        throw new ProblemError({
+          status: 500,
+          title: "Internal Server Error",
+          detail: "An estimate has an unknown status.",
+        });
+      }
+      return {
+        id: row.id,
+        job_id: row.job_id,
+        takeoff_id: row.takeoff_id,
+        number: row.number,
+        version: row.version,
+        status: row.status,
+        total_cents: cents(row.total_cents),
+        updated_at: iso(row.updated_at),
+      };
+    }),
+  };
 }
