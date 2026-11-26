@@ -81,6 +81,14 @@ const TENANT_ROUTES = [
   "put /takeoffs/{id}/measurements",
   "delete /measurements/{id}",
   "get /takeoffs/{id}/summary",
+  "post /jobs/{id}/estimates",
+  "get /estimates/{id}",
+  "patch /estimates/{id}",
+  "post /estimates/{id}/lines",
+  "post /estimates/{id}/recalculate",
+  "post /estimates/{id}/transition",
+  "patch /line-items/{id}",
+  "delete /line-items/{id}",
 ];
 
 type Session = { cookie: string; email: string };
@@ -297,6 +305,18 @@ function tenantPayload(
       return { status: "in_review" };
     case "put /takeoffs/{id}/measurements":
       return { features: [] };
+    case "post /jobs/{id}/estimates":
+      return {};
+    case "patch /estimates/{id}":
+      return { notes: "no" };
+    case "post /estimates/{id}/lines":
+      return { description: "Nope", qty: "1", unit: "ea" };
+    case "patch /line-items/{id}":
+      return { description: "Nope" };
+    case "post /estimates/{id}/recalculate":
+      return {};
+    case "post /estimates/{id}/transition":
+      return { to: "ready" };
     case "post /imagery/ingest":
       return { sourceId: createId(), year: 2026, countyFips: "37023" };
     case "post /admin/imagery-sources":
@@ -688,7 +708,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|takeoffs|measurements|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|takeoffs|measurements|estimates|line-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {

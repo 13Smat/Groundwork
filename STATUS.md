@@ -1,6 +1,6 @@
 # Status
 
-Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and measurements (spec 04, part 1) and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Estimating (spec 07, part 1) is the current slice. Catalog and cost recipes (spec 06, part 2), takeoff and measurements (spec 04, part 1), and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -16,17 +16,18 @@ Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and mea
 - Fastify routes for clients, contacts, locations, resolve, jobs, transitions, notes, tasks, presigned files, search, and the pipeline summary. Creating a client warns on a duplicate email or phone and still creates the row.
 - The office app has the pipeline board, jobs list, address-first job create, job detail, clients, and a location context map. Column totals come from `/pipeline/summary`. Lost asks for a reason. A 409 is shown and the card stays put. File rows include a presigned `download_url`. `GET /jobs/:id/activity` reads `audit_log`. The map uses MapLibre and only the seeded `fixture_rgbir` tile. Playwright covers create, the lost reason, the illegal transition, upload, and search.
 - Takeoff measurements are migration `0009_takeoff.sql`. `takeoff` and `measurement` force row security and reference the `takeoff_item` table from `0006`. ADR 0013. `Takeoff.status` is `draft -> in_review -> final`, and `final -> draft` inserts the next version. PostGIS geography is the stored area and length. Turf in `packages/geo` is the live-feedback helper. A source with `allows_tracing = false` or a null `verified_at` is 403. A capture that is not `ready` is 409.
+- Estimating part 1 is migration `0011_estimating.sql`. `estimate` and `line_item` force row security. ADR 0015. `Estimate.status` is `draft -> ready -> sent -> accepted`, with `ready -> draft` and `ready|sent -> superseded`. Leaving draft freezes `snapshot`. A flagged or unresolved line blocks `ready` with 409. Generation uses the active recipe and `previewRecipe`. A line pins the recipe row. Recalculate of a draft re-reads that component and the current catalog cost. `GET` of a non-draft estimate returns the snapshot. The first estimate number is `E-1001`. Roles without `catalog.manage` do not receive costs. A negative line needs `catalog.manage`. `template_id` is 400. Quantity diff and versions are part 2.
 - Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
 - Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
 - Tenant routes return 404 when the session is not an active member.
-- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, and takeoff tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
+- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, takeoff, and estimating tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
 
 ## Not in this slice
 
 - A signed proposal. `hasSignedProposal` stays false until spec 08, so won is the force path only.
 - v1 stages (`scheduled` through `closed`) are in the check constraint and are not reachable.
 - A foreign key from `takeoff_item` to `job` or `location`. Those tables exist in `0005`. `0006` does not reference them.
-- Estimate snapshots. Spec 07 must call `previewRecipe` so a saved total matches the preview. The recipe screen keeps the previous version's formula when a new draft is saved. A saved estimate total is still spec 07.
+- Quantity diff, apply-quantities, and estimate versions. Spec 07 part 2. A saved draft total matches `previewRecipe`. A ready or sent estimate serves its snapshot.
 - Assemblies of assemblies, price lists, and vendor feeds.
 - `output_unit`. The column is `input_unit`. The entity table still says `output_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - A county boundary table. A county FIPS is accepted, and the raster footprint is not checked against a county polygon.

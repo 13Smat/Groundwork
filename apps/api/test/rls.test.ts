@@ -24,6 +24,8 @@ const TENANT_TABLES = [
   "job_file",
   "takeoff",
   "measurement",
+  "estimate",
+  "line_item",
 ] as const;
 const AUTH_TABLES = [
   "app_user",
@@ -685,6 +687,8 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     job_file: { a: createId(), b: createId() },
     takeoff: { a: createId(), b: createId() },
     measurement: { a: createId(), b: createId() },
+    estimate: { a: createId(), b: createId() },
+    line_item: { a: createId(), b: createId() },
   };
   const takeoffItem = { a: createId(), b: createId() };
   const pool = requireAdmin();
@@ -810,6 +814,31 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
       ids.takeoff.b,
       takeoffItem.b,
     ],
+  );
+  await pool.query(
+    `insert into estimate (id, workspace_id, job_id, takeoff_id, number, version, status)
+     values
+       ($1, $2, $3, $4, 'E-1', 1, 'draft'),
+       ($5, $6, $7, $8, 'E-1', 1, 'draft')`,
+    [
+      ids.estimate.a,
+      workspaceA,
+      ids.job.a,
+      ids.takeoff.a,
+      ids.estimate.b,
+      workspaceB,
+      ids.job.b,
+      ids.takeoff.b,
+    ],
+  );
+  await pool.query(
+    `insert into line_item (
+       id, workspace_id, estimate_id, description, qty, unit,
+       unit_cost_cents, unit_price_cents, cost_cents, price_cents, source
+     ) values
+       ($1, $2, $3, 'A', 1, 'ea', 0, 0, 0, 0, 'manual'),
+       ($4, $5, $6, 'B', 1, 'ea', 0, 0, 0, 0, 'manual')`,
+    [ids.line_item.a, workspaceA, ids.estimate.a, ids.line_item.b, workspaceB, ids.estimate.b],
   );
   return ids;
 }
@@ -977,6 +1006,47 @@ describe("takeoff row level security", () => {
       expect(measurements.rows.map((row) => row.id)).toEqual([ids.measurement.a]);
       await expect(auth.query("select id from takeoff")).rejects.toThrow(/permission denied/i);
       await expect(auth.query("select id from measurement")).rejects.toThrow(/permission denied/i);
+    } finally {
+      app.release();
+      await auth.end();
+    }
+  });
+});
+
+describe("estimate row level security", () => {
+  it("isolates estimate and line_item rows and does not grant them to groundwork_auth", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const ids = await insertFixtures(workspaceA, workspaceB);
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const unset = await app.query<{ n: number }>("select count(*)::int as n from estimate");
+      expect(unset.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const estimates = await app.query<{ id: string }>(
+        "select id::text as id from estimate where id = any($1::uuid[]) order by id",
+        [[ids.estimate.a, ids.estimate.b]],
+      );
+      const lines = await app.query<{ id: string }>(
+        "select id::text as id from line_item where id = any($1::uuid[]) order by id",
+        [[ids.line_item.a, ids.line_item.b]],
+      );
+      await expect(
+        app.query(
+          `insert into estimate (id, workspace_id, job_id, number, status)
+           values ($1, $2, $3, 'E-9', 'draft')`,
+          [createId(), workspaceB, ids.job.b],
+        ),
+      ).rejects.toThrow(/row-level security|new row violates/i);
+      await app.query("rollback");
+
+      expect(estimates.rows.map((row) => row.id)).toEqual([ids.estimate.a]);
+      expect(lines.rows.map((row) => row.id)).toEqual([ids.line_item.a]);
+      await expect(auth.query("select id from estimate")).rejects.toThrow(/permission denied/i);
+      await expect(auth.query("select id from line_item")).rejects.toThrow(/permission denied/i);
     } finally {
       app.release();
       await auth.end();

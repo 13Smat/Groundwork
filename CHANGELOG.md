@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Spec 07 part 1 — Takeoff-to-estimate engine
+
+- Added `0011_estimating.sql` for `estimate` and `line_item`. Tenant row security is forced. `groundwork_app` is the only grantee. ADR 0015. The estimate points at `takeoff.id`.
+- `Estimate.status` lives in `packages/shared`. `draft -> ready -> sent -> accepted`, `ready -> draft`, and `ready|sent -> superseded`. Leaving draft writes `snapshot`. A flagged or unresolved line blocks `ready` with 409.
+- `packages/pricing` prices a recipe component through `previewRecipe`, rounds each line half-even to cents, and sums those cents. Optional lines stay out of the headline totals. A blank material tax code is `materials`. `tax_rate` is a fraction. Markup and overhead are percents.
+- Added estimate and line routes. Generation reads the active recipe and pins `recipe_id` plus `recipe_version`. A variable patch reprices that line. Recalculate reprices a draft from the pinned component and the current catalog cost, and skips a line whose money did not change. `GET` of a non-draft estimate returns the snapshot. `template_id` is 400.
+- The first estimate number in a workspace is `E-1001`. A negative line needs `catalog.manage`. Roles without that token do not receive cost or margin fields. Mutations write `audit_log` without those fields.
+- CI runs `pnpm test:estimating` in the `db` job. The tests cover the measurement's cents against `linesFromGroups`, a variable override that leaves the other line's `updated_at` alone, a ready snapshot after a recipe edit and a catalog cost change, office cost hiding, the flagged 409, and cross-tenant row security.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Spec 06 part 2 — Catalog grid, recipe builder, and starter pack
 
 - The office catalog screen has a tab per kind, an inline grid, and a detail drawer. Arrow keys move between cells. Roles without `catalog.manage` do not see the unit cost column, and the grid is read only for them.
