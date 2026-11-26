@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   TabList,
+  TabPanel,
   TabTrigger,
   Tabs,
   TextField,
@@ -148,77 +149,85 @@ export function CatalogScreen({
             </TabTrigger>
           ))}
         </TabList>
-      </Tabs>
-      {canManage ? (
-        <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" disabled={busy} onClick={() => void starter()}>
-            Load starter pack
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void onExport().catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : "Could not export the catalog.");
-              });
-            }}
-          >
-            Export CSV
-          </Button>
-          <Button variant="secondary" onClick={() => setImportOpen(true)}>
-            Import CSV
-          </Button>
-        </div>
-      ) : null}
-      {canManage ? (
-        <form key={kind} onSubmit={addItem} className="grid gap-4 md:grid-cols-2">
-          <TextField id="new-name" name="name" label="New item name" required />
-          <TextField
-            id="new-unit"
-            name="unit"
-            label="New item unit"
-            defaultValue={DEFAULT_CATALOG_UNIT[kind]}
-            required
-          />
-          <TextField id="new-sku" name="sku" label="New item SKU" />
-          <TextField
-            id="new-cost"
-            name="cost"
-            label="New item unit cost"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-          <TextField
-            id="new-price"
-            name="price"
-            label="New item sell price"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-          <div className="flex items-end">
-            <Button type="submit">Add item</Button>
+        {canManage ? (
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" disabled={busy} onClick={() => void starter()}>
+              Load starter pack
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void onExport().catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : "Could not export the catalog.");
+                });
+              }}
+            >
+              Export CSV
+            </Button>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              Import CSV
+            </Button>
           </div>
-        </form>
-      ) : null}
-      {loading ? (
-        <p>Loading catalog.</p>
-      ) : (
-        <CatalogGrid
-          caption={KIND_LABEL[kind]}
-          items={visible}
-          canManage={canManage}
-          onPatch={async (id, patch) => {
-            setError("");
-            await onPatch(id, patch);
-            setNotice("Saved.");
-          }}
-          onOpen={(item) => setDetailId(item.id)}
-          onError={(message) => {
-            setNotice("");
-            setError(message);
-          }}
-          onSaved={() => setNotice("Saved.")}
-        />
-      )}
+        ) : null}
+        {CATALOG_KINDS.map((item) => (
+          <TabPanel key={item} value={item}>
+            {item === kind ? (
+              <>
+                {canManage ? (
+                  <form key={kind} onSubmit={addItem} className="grid gap-4 md:grid-cols-2">
+                    <TextField id="new-name" name="name" label="New item name" required />
+                    <TextField
+                      id="new-unit"
+                      name="unit"
+                      label="New item unit"
+                      defaultValue={DEFAULT_CATALOG_UNIT[kind]}
+                      required
+                    />
+                    <TextField id="new-sku" name="sku" label="New item SKU" />
+                    <TextField
+                      id="new-cost"
+                      name="cost"
+                      label="New item unit cost"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                    />
+                    <TextField
+                      id="new-price"
+                      name="price"
+                      label="New item sell price"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                    />
+                    <div className="flex items-end">
+                      <Button type="submit">Add item</Button>
+                    </div>
+                  </form>
+                ) : null}
+                {loading ? (
+                  <p>Loading catalog.</p>
+                ) : (
+                  <CatalogGrid
+                    caption={KIND_LABEL[kind]}
+                    items={visible}
+                    canManage={canManage}
+                    onPatch={async (id, patch) => {
+                      setError("");
+                      await onPatch(id, patch);
+                      setNotice("Saved.");
+                    }}
+                    onOpen={(opened) => setDetailId(opened.id)}
+                    onError={(message) => {
+                      setNotice("");
+                      setError(message);
+                    }}
+                    onSaved={() => setNotice("Saved.")}
+                  />
+                )}
+              </>
+            ) : null}
+          </TabPanel>
+        ))}
+      </Tabs>
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetailId(null)}>
         {detail ? (
           <DialogContent placement="end" title={detail.name} description="Catalog item details.">

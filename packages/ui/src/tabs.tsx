@@ -21,3 +21,15 @@ export function TabTrigger({ value, children }: { value: string; children: React
     </TabsPrimitive.Trigger>
   );
 }
+
+/**
+ * Every trigger's aria-controls has to name a panel that is in the document.
+ * Inactive panels stay mounted and hidden so that reference stays valid.
+ */
+export function TabPanel({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <TabsPrimitive.Content value={value} forceMount>
+      {children}
+    </TabsPrimitive.Content>
+  );
+}

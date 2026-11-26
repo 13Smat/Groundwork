@@ -24,6 +24,7 @@ export default defineConfig({
       "apps/api/test/proposals.integration.test.ts",
       "apps/api/test/esign.integration.test.ts",
       "apps/api/test/assist.integration.test.ts",
+      "apps/api/test/seed.integration.test.ts",
     ],
   },
 });

@@ -18,7 +18,7 @@ import {
   type Workspace,
 } from "./session";
 
-const TIME_ZONES = [
+export const TIME_ZONES = [
   "America/New_York",
   "America/Chicago",
   "America/Denver",
@@ -199,7 +199,7 @@ export function CreateWorkspacePage() {
         }),
       });
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      await navigate({ to: "/" });
+      await navigate({ to: "/onboarding" });
     } catch (err) {
       setError(message(err, "Could not create the workspace."));
     }

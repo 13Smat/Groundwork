@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { skipOnboarding } from "./session";
+
 test("a new user can sign up, create a workspace, and see an empty dashboard", async ({ page }) => {
   const email = `owner-${Date.now()}@example.com`;
   await page.goto("/sign-up");
@@ -15,8 +17,7 @@ test("a new user can sign up, create a workspace, and see an empty dashboard", a
   await expect(page.getByRole("heading", { name: "Create workspace" })).toBeVisible();
   await page.getByLabel("Company name").fill("Pat Paving");
   await page.keyboard.press("Enter");
-
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await skipOnboarding(page);
   await expect(page.getByLabel("Workspace")).toHaveValue(/.+/);
   await expect(page.getByLabel("Workspace")).toContainText("Pat Paving");
 });
@@ -30,7 +31,7 @@ test("an owner can invite a member from the members page", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await page.getByLabel("Company name").fill("Riley Paving");
   await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByText("No jobs yet")).toBeVisible();
+  await skipOnboarding(page);
   await page.getByRole("link", { name: "Members" }).click();
   await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
 

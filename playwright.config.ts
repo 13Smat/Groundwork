@@ -22,7 +22,11 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: ["**/takeoff-editor.spec.ts", "**/takeoff-assist.spec.ts"],
+      testIgnore: [
+        "**/takeoff-editor.spec.ts",
+        "**/takeoff-assist.spec.ts",
+        "**/mvp-slice.spec.ts",
+      ],
     },
     {
       name: "chromium-gl",
@@ -30,7 +34,7 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1100 },
       },
-      testMatch: ["**/takeoff-editor.spec.ts", "**/takeoff-assist.spec.ts"],
+      testMatch: ["**/takeoff-editor.spec.ts", "**/takeoff-assist.spec.ts", "**/mvp-slice.spec.ts"],
     },
   ],
   webServer: [

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Map, StyleSpecification } from "maplibre-gl";
 
+import { labelMapControls } from "../map-a11y";
 import { api } from "../session";
 import type { LatLng, SiteGeom } from "./types";
 
@@ -85,6 +86,7 @@ export function SiteMap({
           if (!map) {
             return;
           }
+          labelMapControls(map.getContainer());
           addOverlays(map, currentPoint, currentParcel);
           if (interactive) {
             map.getCanvas().style.cursor = "crosshair";
@@ -115,6 +117,7 @@ export function SiteMap({
       <div
         ref={container}
         className="h-80 w-full overflow-hidden rounded-md border border-line"
+        role="region"
         aria-label="Site map"
       />
       <p className="text-sm text-muted">Context only. This map is not a measurement.</p>

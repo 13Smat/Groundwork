@@ -36,7 +36,8 @@ import { JobDetailPage } from "./crm/job-detail-page";
 import { JobsPage } from "./crm/jobs-page";
 import { LocationPage } from "./crm/location-page";
 import { PipelinePage } from "./crm/pipeline-page";
-import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
+import { OnboardingPage } from "./onboarding-page";
+import { activeWorkspace, api, loadMe, queryClient, rememberNext, type Workspace } from "./session";
 import { EstimateEditorPage } from "./estimate/editor-page";
 import { JobEstimates } from "./estimate/job-estimates";
 import { JobProposals } from "./proposal/job-proposals";
@@ -87,6 +88,9 @@ const TITLES: Record<OfficePath, string> = {
 function titleFor(pathname: string): string {
   if (pathname === "/workspaces/new") {
     return "Create workspace";
+  }
+  if (pathname === "/onboarding") {
+    return "Set up your workspace";
   }
   if (pathname.startsWith("/invites/")) {
     return "Accept invite";
@@ -231,9 +235,28 @@ const authedRoute = createRoute({
     }
     const active = profile.memberships.some((member) => member.status === "active");
     const open =
-      location.pathname === "/workspaces/new" || location.pathname.startsWith("/invites/");
+      location.pathname === "/workspaces/new" ||
+      location.pathname === "/onboarding" ||
+      location.pathname.startsWith("/invites/");
+    if (!active && location.pathname === "/onboarding") {
+      throw redirect({ to: "/workspaces/new" });
+    }
     if (!active && !open) {
       throw redirect({ to: "/workspaces/new" });
+    }
+    const workspaceId = active ? activeWorkspace(profile)?.workspace_id : undefined;
+    const inSetup =
+      location.pathname === "/onboarding" ||
+      location.pathname === "/workspaces/new" ||
+      location.pathname.startsWith("/invites/");
+    if (active && workspaceId && !inSetup) {
+      const workspace = await queryClient.ensureQueryData({
+        queryKey: ["workspace", workspaceId],
+        queryFn: () => api<Workspace>(`/workspaces/${workspaceId}`),
+      });
+      if (workspace.features.onboarding_complete !== true) {
+        throw redirect({ to: "/onboarding" });
+      }
     }
   },
   component: function AuthedLayout() {
@@ -475,6 +498,12 @@ const imageryAdminRoute = createRoute({
   component: ImageryRoute,
 });
 
+const onboardingRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/onboarding",
+  component: OnboardingPage,
+});
+
 const createWorkspaceRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/workspaces/new",
@@ -533,6 +562,7 @@ const routeTree = rootRoute.addChildren([
     membersRoute,
     rolesRoute,
     imageryAdminRoute,
+    onboardingRoute,
     createWorkspaceRoute,
     acceptRoute,
   ]),
