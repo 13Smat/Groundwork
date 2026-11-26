@@ -208,6 +208,37 @@ export function readObjectStorageConfig(): ObjectStorageConfig {
   };
 }
 
+export function aiAssistEnabled(): boolean {
+  return process.env.GROUNDWORK_AI_ASSIST === "1";
+}
+
+/**
+ * Empty outside production uses the local mock. Production must set the URL.
+ * The host cannot be a forbidden imagery host. ADR 0016.
+ */
+export function readCvServiceUrl(): URL {
+  const configured = readOptional("CV_SERVICE_URL");
+  if (!configured) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CV_SERVICE_URL is required when NODE_ENV is production.");
+    }
+    return new URL("http://127.0.0.1:8090");
+  }
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error(`CV_SERVICE_URL is not a URL. Received ${configured}.`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("CV_SERVICE_URL must be http or https.");
+  }
+  if (!url.hostname || hostIsForbidden(url.hostname)) {
+    throw new Error(`CV_SERVICE_URL host is not allowed. Received ${url.hostname}.`);
+  }
+  return url;
+}
+
 /** Hide a database password before it reaches a log line. */
 export function redactDatabaseUrl(value: string): string {
   try {

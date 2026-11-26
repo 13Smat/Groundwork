@@ -20,6 +20,7 @@ export default defineConfig({
       "apps/api/test/crm.integration.test.ts",
       "apps/api/test/takeoff.integration.test.ts",
       "apps/api/test/estimating.integration.test.ts",
+      "apps/api/test/assist.integration.test.ts",
     ],
   },
 });

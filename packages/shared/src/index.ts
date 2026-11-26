@@ -61,6 +61,13 @@ export {
   type RecipeStatus,
 } from "./state/recipe.js";
 export {
+  DETECTION_RUN_STATUSES,
+  IllegalDetectionRunTransitionError,
+  isDetectionRunStatus,
+  transitionDetectionRun,
+  type DetectionRunStatus,
+} from "./state/detection-run.js";
+export {
   IllegalTakeoffTransitionError,
   isTakeoffStatus,
   TAKEOFF_STATUSES,

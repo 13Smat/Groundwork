@@ -13,6 +13,7 @@ describe("migration files", () => {
       "0006_catalog_recipes.sql",
       "0009_takeoff.sql",
       "0011_estimating.sql",
+      "0012_detection.sql",
     ]);
   });
 });

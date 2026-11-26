@@ -11,6 +11,7 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/coverage/**",
       "**/.venv-imagery/**",
+      "**/.venv-cv/**",
     ],
   },
   eslint.configs.recommended,

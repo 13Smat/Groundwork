@@ -404,4 +404,33 @@ export interface Database {
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
   };
+  detection_run: {
+    id: string;
+    workspace_id: string;
+    takeoff_id: string;
+    imagery_capture_id: string | null;
+    mode: string;
+    classes: string[];
+    status: string;
+    gpu_seconds: string | null;
+    error: string | null;
+    idempotency_key: string;
+    request_hash: string;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  detection_feature: {
+    id: string;
+    workspace_id: string;
+    run_id: string;
+    class: string | null;
+    geom: unknown;
+    score: number | null;
+    accepted_measurement_id: string | null;
+    takeoff_item_id: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
 }

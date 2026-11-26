@@ -17,3 +17,5 @@ A new tenant table enables and forces row level security in its own migration, g
 `0009_takeoff.sql` adds `takeoff` and `measurement` and references the `takeoff_item` table from `0006`. Both tables use the foundations policy and are granted to `groundwork_app` only. `0007` stays reserved for the catalog UI slice. The CRM UI shipped without a migration. ADR 0013.
 
 `0011_estimating.sql` adds `estimate` and `line_item`. Both use the foundations policy and are granted to `groundwork_app` only. `0010` stays reserved for the map takeoff follow-up. ADR 0015.
+
+`0012_detection.sql` adds `detection_run` and `detection_feature`. Both tables use the foundations policy and are granted to `groundwork_app` only. `usage_event` already exists in `0001` and is not recreated. ADR 0016.
