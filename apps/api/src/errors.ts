@@ -12,6 +12,8 @@ const TITLES: Record<number, string> = {
   404: "Not Found",
   409: "Conflict",
   500: "Internal Server Error",
+  501: "Not Implemented",
+  502: "Bad Gateway",
 };
 
 function titleFor(status: number): string {

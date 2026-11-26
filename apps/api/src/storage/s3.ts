@@ -1,4 +1,9 @@
-import { HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CreateBucketCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { isUuidV7 } from "@groundwork/shared";
 
@@ -101,6 +106,34 @@ export async function presignUpload(
     storageKey: input.storageKey,
     expiresInSeconds,
   };
+}
+
+export async function putObject(
+  input: { storageKey: string; body: Buffer; mime: string },
+  config: ObjectStorageConfig = readObjectStorageConfig(),
+): Promise<void> {
+  assertStorageKey(input.storageKey);
+  const client = createS3Client(config);
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: input.storageKey,
+      Body: input.body,
+      ContentType: input.mime,
+    }),
+  );
+}
+
+/** Create the bucket when a local test is talking to a fresh MinIO. */
+export async function ensureBucket(
+  config: ObjectStorageConfig = readObjectStorageConfig(),
+): Promise<void> {
+  const client = createS3Client(config);
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: config.bucket }));
+  } catch {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }));
+  }
 }
 
 /** Confirm the bucket exists. Compose's minio-init creates it. */

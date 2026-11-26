@@ -22,7 +22,16 @@ Foundations 2 ([ADR 0005](../adr/0005-local-infra-and-rls.md)) applies this expr
 workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid
 ```
 
-The imagery tables are not in that migration. The policy for a null `workspace_id` is still not written.
+The imagery tables are not in that migration. ADR 0005 did not write the null `workspace_id` policy. ADR 0006 does.
+
+Migration `0003_imagery.sql` ([ADR 0006](../adr/0006-imagery-registry-and-tiles.md)) applies this read policy on `imagery_source` and `imagery_capture`:
+
+```sql
+workspace_id is null
+or workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid
+```
+
+Insert, update, and delete use a different policy: `workspace_id` must be non-null and equal to the same setting. `groundwork_app` cannot write a global row. The migration role writes the seeded global rows. The spec files were not edited.
 
 ## Mapping the Better Auth tables to the 01 `app_user` / `member` / `role` tables; the `citext` extension
 
@@ -81,3 +90,17 @@ Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nv
 `docs/specs/04-map-takeoff-manual.md` forbids Google Maps Platform and Mapbox satellite as a measurement or AI input, and says a non-measurement context basemap is "OK only ... with attribution, if at all." Which basemap, if any, is not chosen.
 
 `GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed.
+
+## `locationId` on `GET /imagery/captures` before the location table exists
+
+Spec 04 accepts `locationId` or `bbox`. Spec 03 owns `location`, and that table is not migrated. [ADR 0006](../adr/0006-imagery-registry-and-tiles.md) accepts the parameter and returns 501 until a lookup is plugged in. `bbox` is the spatial query this slice implements.
+
+## Age-warning day counts, tile signature lifetime, and who calls TiTiler
+
+Spec 04 says to warn when a capture is older than 12 months, and to warn more strongly as it approaches 4 years. It does not give a day count for the second warning. The captures route uses 365 days and 1095 days. Both are provisional.
+
+The same spec says the API issues short-lived signed tile URLs. It does not say the lifetime, or whether the browser calls TiTiler. This slice proxies. The HMAC lives for 60 seconds and is not given to the browser. `usage_event.cost_estimate_cents` for `imagery_tile` is 0. How a usage row becomes an invoice is already an open question above.
+
+## Blocked imagery products are not in the provider check
+
+The spec 01 sketch limits `provider` to `nc_ortho`, `nc_helene_2025`, `naip`, `county`, `nearmap`, `vexcel`, `drone_upload`, and `other`. The blocked rows `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` are stored as `other`. The `name` column is the registry key. The sketch has no separate slug.

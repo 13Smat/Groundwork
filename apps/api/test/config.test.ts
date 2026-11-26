@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   LOCAL_DATABASE_URL,
+  LOCAL_TILE_SIGNING_SECRET,
   readAppDatabaseUrl,
   readDatabaseUrl,
   readObjectStorageConfig,
   readPort,
+  readTileSigningSecret,
+  readTitilerUrl,
   redactDatabaseUrl,
 } from "../src/config.js";
 
@@ -15,6 +18,8 @@ const touched = [
   "APP_DATABASE_URL",
   "S3_ENDPOINT",
   "S3_BUCKET",
+  "TITILER_URL",
+  "TILE_SIGNING_SECRET",
 ] as const;
 const previous = new Map<string, string | undefined>();
 
@@ -80,5 +85,24 @@ describe("config", () => {
   it("requires object storage settings in production", () => {
     setEnv({ NODE_ENV: "production", S3_ENDPOINT: undefined, S3_BUCKET: undefined });
     expect(() => readObjectStorageConfig()).toThrow(/S3_ENDPOINT is required/);
+  });
+
+  it("uses the local tile service outside production and refuses it in production", () => {
+    setEnv({ NODE_ENV: "development", TITILER_URL: undefined, TILE_SIGNING_SECRET: undefined });
+    expect(readTitilerUrl().origin).toBe("http://127.0.0.1:8080");
+    expect(readTileSigningSecret()).toBe(LOCAL_TILE_SIGNING_SECRET);
+
+    setEnv({ NODE_ENV: "production", TILE_SIGNING_SECRET: undefined });
+    expect(() => readTileSigningSecret()).toThrow(/TILE_SIGNING_SECRET/);
+
+    setEnv({ NODE_ENV: "production", TILE_SIGNING_SECRET: LOCAL_TILE_SIGNING_SECRET });
+    expect(() => readTileSigningSecret()).toThrow(/non-default/);
+
+    setEnv({
+      NODE_ENV: "production",
+      TITILER_URL: "https://services.nconemap.gov/tiles",
+      TILE_SIGNING_SECRET: "a-real-signing-secret",
+    });
+    expect(() => readTitilerUrl()).toThrow(/not allowed/);
   });
 });

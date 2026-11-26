@@ -51,4 +51,44 @@ export interface Database {
     cost_estimate_cents: string | null;
     at: Generated<Date | null>;
   };
+  /**
+   * Global rows use a null workspace_id. The read policy is in 0003_imagery.sql.
+   * Spatial queries go through sql so dates are cast to text there.
+   */
+  imagery_source: {
+    id: string;
+    workspace_id: string | null;
+    provider: string;
+    name: string;
+    coverage: unknown;
+    capture_date: string | null;
+    gsd_cm: string | null;
+    bands: string;
+    license_text: string | null;
+    license_url: string | null;
+    allows_tracing: boolean;
+    allows_ml_training: boolean;
+    attribution: string | null;
+    verified_at: Date | null;
+    notes: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  imagery_capture: {
+    id: string;
+    workspace_id: string | null;
+    source_id: string;
+    coverage: unknown;
+    capture_date: string;
+    gsd_cm: string;
+    bands: string;
+    leaf: string | null;
+    cog_key: string | null;
+    status: string;
+    notes: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
 }

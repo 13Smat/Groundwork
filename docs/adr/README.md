@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0006.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0007.
 
 | ADR | Title |
 | --- | --- |
@@ -10,3 +10,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0003](0003-dropbox-sign.md) | Dropbox Sign behind a SignatureProvider |
 | [0004](0004-node-24.md) | Node 24 LTS |
 | [0005](0005-local-infra-and-rls.md) | Local infra, the app role, and infra table shapes |
+| [0006](0006-imagery-registry-and-tiles.md) | Imagery registry and the TiTiler gate |

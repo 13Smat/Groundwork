@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readAppDatabaseUrl, readDatabaseUrl } from "../src/config.js";
 import { createDb, createPool } from "../src/db/client.js";
-import { migrate } from "../src/db/migrate.js";
+import { listUpMigrations, migrate } from "../src/db/migrate.js";
 import type { Database } from "../src/db/types.js";
 import { TenantRoleError, withWorkspaceContext } from "../src/db/workspace.js";
 import { startQueue } from "../src/queue.js";
@@ -209,20 +209,29 @@ describe("row level security", () => {
     await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   });
 
-  it("reverts the migration and applies it again", async () => {
+  it("reverts every applied migration and applies them again", async () => {
     await disconnect();
-    const reverted = await migrate("down");
-    expect(reverted.reverted).toEqual(["0001_extensions_and_infra"]);
+    const versions = listUpMigrations().map((name) => name.replace(/\.sql$/, ""));
+    const reverted: string[] = [];
+    for (let index = 0; index < versions.length; index += 1) {
+      const result = await migrate("down");
+      reverted.push(...result.reverted);
+    }
+    expect(reverted).toEqual([...versions].reverse());
 
     const check = createPool(readDatabaseUrl());
     const missing = await check.query<{ name: string | null }>(
       "select to_regclass('public.file')::text as name",
     );
     expect(missing.rows[0]?.name).toBeNull();
+    const imagery = await check.query<{ name: string | null }>(
+      "select to_regclass('public.imagery_capture')::text as name",
+    );
+    expect(imagery.rows[0]?.name).toBeNull();
     await check.end();
 
     const applied = await migrate("up");
-    expect(applied.applied).toEqual(["0001_extensions_and_infra"]);
+    expect(applied.applied).toEqual(versions);
     await connect();
 
     const workspaceA = createId();
@@ -234,6 +243,115 @@ describe("row level security", () => {
     } finally {
       client.release();
     }
+  });
+});
+
+describe("imagery row level security", () => {
+  it("forces row security on the imagery tables", async () => {
+    const result = await requireAdmin().query<{
+      relname: string;
+      relrowsecurity: boolean;
+      relforcerowsecurity: boolean;
+    }>(
+      `
+        select c.relname, c.relrowsecurity, c.relforcerowsecurity
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = any($1::text[])
+      `,
+      [["imagery_source", "imagery_capture"]],
+    );
+    expect(result.rows).toHaveLength(2);
+    for (const row of result.rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it("lets every workspace read a global row and hides another workspace's row", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const sourceA = createId();
+    const sourceB = createId();
+    await requireAdmin().query(
+      `insert into imagery_source (id, workspace_id, provider, name, bands, allows_tracing, allows_ml_training)
+       values ($1, $2, 'drone_upload', $3, 'RGB', false, false),
+              ($4, $5, 'drone_upload', $6, 'RGB', false, false)`,
+      [sourceA, workspaceA, `tenant-${sourceA}`, sourceB, workspaceB, `tenant-${sourceB}`],
+    );
+
+    const client = await requireApp().connect();
+    try {
+      const unset = await client.query<{ name: string }>(
+        "select name from imagery_source where name = 'naip'",
+      );
+      expect(unset.rows.map((row) => row.name)).toEqual(["naip"]);
+
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const visible = await client.query<{ id: string }>(
+        "select id::text as id from imagery_source where id::text = any($1::text[]) order by id",
+        [[sourceA, sourceB]],
+      );
+      const globalRow = await client.query<{ name: string }>(
+        "select name from imagery_source where name = 'google_satellite'",
+      );
+      await client.query("rollback");
+      expect(visible.rows.map((row) => row.id)).toEqual([sourceA]);
+      expect(globalRow.rows).toHaveLength(1);
+    } finally {
+      client.release();
+    }
+  });
+
+  it("refuses a global write from the app role and allows a tenant write", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const client = await requireApp().connect();
+    try {
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      await expect(
+        client.query(
+          `insert into imagery_source (id, workspace_id, provider, name, bands, allows_tracing, allows_ml_training)
+           values ($1, null, 'other', $2, 'RGB', false, false)`,
+          [createId(), `global-${createId()}`],
+        ),
+      ).rejects.toThrow(/row-level security/i);
+      await client.query("rollback");
+
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const tenantId = createId();
+      await client.query(
+        `insert into imagery_source (id, workspace_id, provider, name, bands, allows_tracing, allows_ml_training)
+         values ($1, $2, 'drone_upload', $3, 'RGB', false, false)`,
+        [tenantId, workspaceA, `tenant-${tenantId}`],
+      );
+      await expect(
+        client.query(
+          `insert into imagery_source (id, workspace_id, provider, name, bands, allows_tracing, allows_ml_training)
+           values ($1, $2, 'drone_upload', $3, 'RGB', false, false)`,
+          [createId(), workspaceB, `tenant-${createId()}`],
+        ),
+      ).rejects.toThrow(/row-level security/i);
+      await client.query("rollback");
+
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const updated = await client.query(
+        "update imagery_source set allows_tracing = true where name = 'google_satellite'",
+      );
+      expect(updated.rowCount).toBe(0);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+
+    const stillBlocked = await requireAdmin().query<{ allows_tracing: boolean }>(
+      "select allows_tracing from imagery_source where name = 'google_satellite'",
+    );
+    expect(stillBlocked.rows[0]?.allows_tracing).toBe(false);
   });
 });
 
