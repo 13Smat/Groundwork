@@ -88,6 +88,9 @@ jobs:
       - name: Auth and workspaces
         run: pnpm test:auth
 
+      - name: CRM and jobs
+        run: pnpm test:crm
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

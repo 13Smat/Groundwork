@@ -15,6 +15,7 @@
     "test": "pnpm build:api-deps && vitest run",
     "test:rls": "pnpm build:api-deps && vitest run --config vitest.rls.config.ts",
     "test:auth": "pnpm build:api-deps && vitest run --config vitest.auth.config.ts",
+    "test:crm": "pnpm build:api-deps && vitest run --config vitest.crm.config.ts",
     "test:e2e": "pnpm build:api-deps && playwright test",
     "test:imagery": "pnpm build:api-deps && vitest run --config vitest.imagery.config.ts",
     "test:tiles": "python3 -m unittest services/tiles/tests/test_guard.py",

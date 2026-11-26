@@ -47,8 +47,9 @@ export type ImageryCaptureResponse = z.infer<typeof captureResponseSchema>;
 export type LocationLookup = (input: { workspaceId: string; locationId: string }) => Promise<BBox>;
 
 /**
- * Spec 03 has not migrated `location`. The route accepts locationId so the
- * contract exists, and this lookup tells the caller to pass bbox until then.
+ * Fallback when a caller has not passed a location lookup. The API wires
+ * `createLocationBBoxLookup` once the location table exists. This stub remains
+ * so a route registration without that lookup still fails closed.
  */
 export const locationLookupUnavailable: LocationLookup = () => {
   throw new ProblemError({
