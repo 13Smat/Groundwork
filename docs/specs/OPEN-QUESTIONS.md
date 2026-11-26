@@ -45,7 +45,7 @@ These choices are still gaps in the specs:
 
 - The permission matrix uses words ("read", "read assigned", "read own", "crew only") and not a token list. ADR 0007 stores `takeoff.read`, `estimate.read`, `proposal.read`, `crm.read.assigned`, `jobs.read.assigned`, `schedule.read`, `schedule.read.own`, and `time.approve.crew`. A later ticket must use those strings.
 - Spec 02 says revoke goes to "(deleted)". The row stays, with status `revoked`. Invitation status `canceled` follows Better Auth's spelling.
-- `GET /catalog-items` returns one fixture row so the cost-visibility check can run. Persisted catalog items are spec 06. The fixture is not a catalog API.
+- `GET /catalog-items` returned one fixture row so the cost-visibility check could run before spec 06. [ADR 0008](../adr/0008-catalog-recipes.md) replaces that fixture with persisted catalog items. Roles without `catalog.manage` still do not receive `unit_cost_cents`. The spec files were not edited.
 - Workspace logo is a URL string. File upload is not specified.
 - `workspace.plan` exists and the API does not set it. Billing is still the open question above.
 - The route table has no way to record the active workspace. `POST /workspaces/:id/activate` does that.
@@ -89,6 +89,14 @@ The header says `id uuid` plus `created_at` and `updated_at`. The sketch uses `b
 ## `cost_recipe` `output_unit` vs `input_unit`
 
 The entity table in `docs/specs/01-data-model.md` says `CostRecipe` has `output_unit`. The SQL sketch says `input_unit text not null`. `docs/specs/06-catalog-cost-recipes.md` says the recipe declares an input unit. Which name is canonical is unspecified.
+
+[ADR 0008](../adr/0008-catalog-recipes.md) stores `input_unit` and does not add `output_unit`. The question is still open.
+
+The sketch also has no `status` and no column that groups versions. Spec 06 requires `draft -> active -> archived` and version n+1 when an active recipe is edited. ADR 0008 adds `status` and `family_id`.
+
+The catalog sketch has no sell price. Spec 02 and spec 06 require one so office staff can see a price without a cost. ADR 0008 adds `unit_price_cents`.
+
+Spec 06 writes `inputQty` and `referencedVars`. The API uses snake_case (`input_qty`, `referenced_vars`), matching the routes from ADR 0007. The spec files were not edited.
 
 ## Spec 07 `templateId` vs the v1 deferral
 

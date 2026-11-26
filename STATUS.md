@@ -1,28 +1,27 @@
 # Status
 
-Auth and workspaces (spec 02) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Catalog and cost recipes (spec 06, part 1) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
 - Ticket 0 through Ticket 2 are on main (`dabcba3`): agent rules, the monorepo, CI, Postgres/PostGIS, MinIO, the `groundwork_app` role, `withWorkspaceContext`, and the office shell. ADR 0001 through ADR 0005.
-- Imagery registry and TiTiler are on main (`2fe041f`). Migration `0003_imagery.sql`, the fixture COG, and the guarded tile service. ADR 0006. `/imagery/*` now uses the session and membership check from this slice. `x-workspace-id` still names the workspace.
-- Migration `0002_auth_workspaces.sql` adds `app_user`, `workspace`, `role`, `session`, `account`, `verification`, `member`, and `invitation`. The six system roles and their permission tokens are seeded. ADR 0007. Better Auth's organization is the workspace. A separate `groundwork_auth` role serves sign-up and sessions. `groundwork_app` cannot assume it.
-- Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
-- Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
-- Tenant routes, including imagery, return 404 when the session is not an active member. `GET /catalog-items` is a fixture: roles with `catalog.manage` see `unit_cost_cents`, and other roles do not.
-- The office app has sign-up, sign-in, create workspace, a switcher, settings, members, and the role list. Playwright covers the keyboard sign-up path.
-- CI `check` runs lint, typecheck, unit tests, the Python guard tests, and build. The `db` job migrates and runs RLS and auth tests. The `imagery` job renders the fixture tile with a real session. An `e2e` job runs Playwright.
+- Imagery registry and TiTiler are on main (`2fe041f`). Migration `0003_imagery.sql`. ADR 0006.
+- Auth and workspaces are on main (`1af0406`). Migration `0002_auth_workspaces.sql`. ADR 0007. `catalog.manage` is already on owner, admin, and estimator. Office does not have it.
+- Migration `0006_catalog_recipes.sql` adds `takeoff_item`, `catalog_item`, `cost_recipe`, and `recipe_component`. Row level security is forced with `workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid`. Grants are to `groundwork_app` only. ADR 0008.
+- `packages/pricing` evaluates recipe formulas with a recursive-descent parser and `decimal.js`. There is no `eval`. Unit factors are exact ratios in `packages/geo`. Money rounds half-even to cents in `previewRecipe`, which the estimate engine will call later.
+- Cost recipe transitions live in `packages/shared`. `draft -> active -> archived`. Editing an active recipe creates version n+1 as a draft. Activating it archives the previous active version. Illegal transitions return 409.
+- `/catalog-items` (including CSV import and export), `/takeoff-items`, `/cost-recipes` (versions and preview), and `POST /formula/validate` use the session and membership guard. A recipe linked to a takeoff item of a different measure kind returns 409. A referenced catalog item is archived instead of deleted. Responses for roles without `catalog.manage` omit `unit_cost_cents` and preview costs.
 
 ## Not in this slice
 
-- `locationId` resolution. The location table is spec 03.
-- County ingest, the ingest API, takeoff drawing, and proposal PDF attribution.
-- A persisted catalog. `GET /catalog-items` is the cost-visibility fixture.
-- Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
-- A browser-facing signed tile URL. Imagery still proxies.
+- TODO: `takeoff_item` has no foreign key to `job` or `location`. CRM lands those tables in its own migration. Do not add the key in `0006`.
+- The office catalog screen. It is still the placeholder.
+- Estimate snapshots. Spec 07 must call `previewRecipe` so a saved total matches the preview. This slice does not create estimates, so it cannot prove that editing a recipe leaves a `ready` or `sent` estimate unchanged.
+- Assemblies of assemblies, price lists, vendor feeds, and the spreadsheet grid.
+- `output_unit`. The column is `input_unit`. The entity table still says `output_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - Sentry. Choosing a license. Choosing between Fly and Render.
 - The remaining gaps in `docs/specs/OPEN-QUESTIONS.md`.
-- Sign-ups or spend. No hosted secrets in git. Local compose passwords, the tile signing secret, and the local Better Auth secret are laptop defaults and are refused when `NODE_ENV=production`.
+- Sign-ups or spend. No hosted secrets in git.
 
 ## Open questions
 

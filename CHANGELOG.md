@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Spec 06 part 1 — Catalog, cost recipes, and the formula engine
+
+- Added `packages/pricing`, a recursive-descent formula parser and evaluator. Operators are `+ - * / ^` and comparisons. Functions are `ceil`, `floor`, `round`, `min`, `max`, and `if`. Built-in takeoff variables come from the input unit. `decimal.js` keeps the math exact. Half-even rounding is only at integer cents and inside `round`. The parser does not call `eval` or `Function`. A complexity cap stops a hostile formula inside 50 ms.
+- Added the measure-unit table to `packages/geo`. Factors are exact integer ratios. One international foot is 0.3048 m. A square yard is nine square feet. An acre is 43,560 square feet.
+- Added migration `0006_catalog_recipes.sql` for `takeoff_item`, `catalog_item`, `cost_recipe`, and `recipe_component`. Tenant row security is forced. `groundwork_app` is the only grantee. There is no foreign key to `job` or `location`. ADR 0008.
+- Added the cost-recipe state machine. `draft -> active -> archived`. An edit of an active recipe creates the next version as a draft, and activating that draft archives the previous one. Anything else is 409.
+- Added the catalog, takeoff item, recipe, preview, and formula routes. CSV import upserts by SKU and can return a diff without writing. Linking a recipe to a takeoff item of a different measure kind is 409. Deleting a catalog item that a component uses archives it. Roles without `catalog.manage` do not receive costs. `catalog.manage` was already seeded in `0002`.
+- `GET /catalog-items` is no longer the visibility fixture. The visibility rule is unchanged.
+
 ### Ticket 02 — Auth and workspaces
 
 - Added `0002_auth_workspaces.sql` for `app_user`, `workspace`, the six system roles, sessions, and invites. Better Auth's organization is the workspace. ADR 0007. Primary keys the library compares are text UUIDv7s. `groundwork_auth` is the sign-up connection and cannot be assumed by `groundwork_app`.
