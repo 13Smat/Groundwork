@@ -39,6 +39,7 @@ export type Workspace = {
   timezone: string;
   currency: string;
   units_pref: "imperial" | "metric";
+  features: Record<string, unknown>;
   plan: string | null;
   address: Address | null;
   license_number: string | null;

@@ -15,6 +15,7 @@ export function useWorkspace() {
     workspaceId,
     memberId: membership?.id,
     currency: workspace.data?.currency ?? "USD",
+    aiAssist: workspace.data?.features?.ai_assist === true,
     ready: Boolean(workspaceId),
   };
 }
