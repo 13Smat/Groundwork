@@ -9,7 +9,8 @@
 - Member transitions, the 7-day invite, and last-owner protection live in `packages/shared`. Illegal changes return 409. Disabling a member deletes that user's sessions immediately.
 - Tenant routes return 404 for a session that is not an active member. `GET /catalog-items` is a fixture that hides `unit_cost_cents` without `catalog.manage`.
 - Replaced `stubImageryAuth`. `/imagery/*` requires the same session and membership check. `x-workspace-id` still names the workspace.
-- The office app can sign up, create a workspace, switch workspaces, edit settings, invite members, and read the role list. Playwright covers the keyboard sign-up path. CI runs the auth tests in the `db` job and Playwright in `e2e`.
+- The office app can sign up, create a workspace, switch workspaces, edit settings, invite members, and read the role list. Playwright covers the keyboard sign-up path. CI runs the auth tests in the `db` job and Playwright in `e2e`. Playwright is 1.65 so Chromium's system dependencies install on the Ubuntu 26.04 runner.
+- `groundwork_auth` is `NOSUPERUSER NOBYPASSRLS`. `groundwork_app` cannot assume that role and has no privilege on `session`, `account`, or `verification`. The sign-in pool is the one handed to Better Auth.
 - Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 
 ### Imagery registry and TiTiler

@@ -124,6 +124,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ubuntu-latest is 26.04. Playwright 1.57 has no dependency list for it.
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 

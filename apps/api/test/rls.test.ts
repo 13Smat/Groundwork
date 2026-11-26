@@ -80,6 +80,107 @@ describe("row level security", () => {
     expect(result.rows.map((row) => row.extname).sort()).toEqual(["citext", "pgcrypto", "postgis"]);
   });
 
+  it("connects Better Auth as groundwork_auth without superuser or row-security bypass", async () => {
+    const catalog = await requireAdmin().query<{
+      rolsuper: boolean;
+      rolbypassrls: boolean;
+      rolcanlogin: boolean;
+      app_can_assume: boolean;
+    }>(`
+      select rolsuper, rolbypassrls, rolcanlogin,
+        pg_has_role('groundwork_app', 'groundwork_auth', 'member') as app_can_assume
+      from pg_roles
+      where rolname = 'groundwork_auth'
+    `);
+    const role = catalog.rows[0];
+    expect(role?.rolsuper).toBe(false);
+    expect(role?.rolbypassrls).toBe(false);
+    expect(role?.rolcanlogin).toBe(true);
+    expect(role?.app_can_assume).toBe(false);
+
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const connected = await auth.query<{
+        current_user: string;
+        rolsuper: boolean;
+        rolbypassrls: boolean;
+      }>("select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user");
+      expect(connected.rows[0]?.current_user).toBe("groundwork_auth");
+      expect(connected.rows[0]?.rolsuper).toBe(false);
+      expect(connected.rows[0]?.rolbypassrls).toBe(false);
+    } finally {
+      await auth.end();
+    }
+  });
+
+  it("refuses session, account, and verification reads from the app role", async () => {
+    const userId = createId();
+    const sessionId = createId();
+    const accountId = createId();
+    const verificationId = createId();
+    const admin = requireAdmin();
+    await admin.query(`insert into app_user (id, name, email) values ($1, 'Hidden', $2)`, [
+      userId,
+      `${userId}@example.com`,
+    ]);
+    await admin.query(
+      `insert into session (id, user_id, token, expires_at)
+       values ($1, $2, $3, now() + interval '1 day')`,
+      [sessionId, userId, `token-${sessionId}`],
+    );
+    await admin.query(
+      `insert into account (id, account_id, provider_id, user_id)
+       values ($1, $2, 'credential', $3)`,
+      [accountId, userId, userId],
+    );
+    await admin.query(
+      `insert into verification (id, identifier, value, expires_at)
+       values ($1, $2, 'secret', now() + interval '1 day')`,
+      [verificationId, `${userId}@example.com`],
+    );
+
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      for (const table of ["session", "account", "verification"] as const) {
+        await expect(app.query(`select count(*)::int as n from ${table}`)).rejects.toThrow(
+          /permission denied/i,
+        );
+      }
+      await app.query("begin");
+      try {
+        await app.query("select set_config('app.workspace_id', $1, true)", [createId()]);
+        await app.query("select set_config('app.user_id', $1, true)", [userId]);
+        await expect(
+          app.query("select id from session where id = $1", [sessionId]),
+        ).rejects.toThrow(/permission denied/i);
+      } finally {
+        await app.query("rollback");
+      }
+
+      const sessions = await auth.query<{ id: string }>("select id from session where id = $1", [
+        sessionId,
+      ]);
+      const accounts = await auth.query<{ id: string }>("select id from account where id = $1", [
+        accountId,
+      ]);
+      const verifications = await auth.query<{ id: string }>(
+        "select id from verification where id = $1",
+        [verificationId],
+      );
+      expect(sessions.rows.map((row) => row.id)).toEqual([sessionId]);
+      expect(accounts.rows.map((row) => row.id)).toEqual([accountId]);
+      expect(verifications.rows.map((row) => row.id)).toEqual([verificationId]);
+    } finally {
+      app.release();
+      await auth.end();
+      await admin.query("delete from verification where id = $1", [verificationId]);
+      await admin.query("delete from account where id = $1", [accountId]);
+      await admin.query("delete from session where id = $1", [sessionId]);
+      await admin.query("delete from app_user where id = $1", [userId]);
+    }
+  });
+
   it("connects the app as a role that cannot bypass row security", async () => {
     const result = await requireApp().query<{
       current_user: string;
