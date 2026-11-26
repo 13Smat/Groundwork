@@ -105,6 +105,38 @@ describe("live quantities", () => {
     expect(moved[0]?.server?.display.ft2).toBe("10000");
   });
 
+  it("keeps ai_assist when a vertex edit is committed", () => {
+    const saved = feature({ source: "ai_assist" });
+    const moved = mergeCommit(
+      [saved],
+      [
+        {
+          id: saved.id,
+          mode: "polygon",
+          itemId: saved.itemId,
+          kind: "area",
+          label: null,
+          source: "ai_assist",
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [-81.7, 35.75],
+                [-81.69, 35.75],
+                [-81.69, 35.752],
+                [-81.7, 35.751],
+                [-81.7, 35.75],
+              ],
+            ],
+          } as GeoJsonGeometry,
+          hidden: false,
+        },
+      ],
+    );
+    expect(moved[0]?.source).toBe("ai_assist");
+    expect(moved[0]?.geometry).not.toEqual(SQUARE);
+  });
+
   it("drops the measure-only ruler and applies the server shape", () => {
     const merged = mergeCommit(
       [],

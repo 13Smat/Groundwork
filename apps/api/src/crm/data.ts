@@ -375,6 +375,76 @@ export async function listLocations(trx: Db, assigned: string | null): Promise<L
   return result.rows;
 }
 
+/** Parcels farther than this from the location point are not "around the site". */
+export const PARCEL_NEAR_M = 2_000;
+export const PARCEL_LIMIT = 50;
+
+export type ParcelBBox = { west: number; south: number; east: number; north: number };
+
+/**
+ * Parcel rows whose geometry intersects `bbox` and lies within
+ * {@link PARCEL_NEAR_M} of the location point. `undefined` when the location
+ * is not visible in this workspace. An empty list when the location has no point.
+ * `parcel_cache` is global; the location read is the tenant guard.
+ */
+export async function listParcelsInBbox(
+  trx: Db,
+  locationId: string,
+  assigned: string | null,
+  bbox: ParcelBBox,
+): Promise<SavedParcel[] | undefined> {
+  const location = await getLocation(trx, locationId, assigned);
+  if (!location) {
+    return undefined;
+  }
+  if (location.lat === null || location.lng === null) {
+    return [];
+  }
+  const result = await sql<{
+    id: string;
+    provider: string;
+    provider_parcel_id: string;
+    geom: string;
+    attrs: unknown;
+  }>`
+    select
+      p.id::text as id,
+      p.provider,
+      p.provider_parcel_id,
+      ST_AsGeoJSON(p.geom) as geom,
+      p.attrs
+    from parcel_cache p
+    where p.geom is not null
+      and p.geom && ST_MakeEnvelope(${bbox.west}, ${bbox.south}, ${bbox.east}, ${bbox.north}, 4326)
+      and ST_Intersects(
+        p.geom,
+        ST_MakeEnvelope(${bbox.west}, ${bbox.south}, ${bbox.east}, ${bbox.north}, 4326)
+      )
+      and ST_DWithin(
+        p.geom::geography,
+        ST_SetSRID(ST_MakePoint(${location.lng}, ${location.lat}), 4326)::geography,
+        ${PARCEL_NEAR_M}
+      )
+    order by p.provider_parcel_id
+    limit ${PARCEL_LIMIT}
+  `.execute(trx);
+  return result.rows.flatMap((row) => {
+    const geom = JSON.parse(row.geom) as GeoJsonMultiPolygon;
+    if (geom.type !== "MultiPolygon") {
+      return [];
+    }
+    return [
+      {
+        id: row.id,
+        provider: row.provider,
+        provider_parcel_id: row.provider_parcel_id,
+        geom,
+        attrs: asRecord(row.attrs),
+      },
+    ];
+  });
+}
+
 export async function getLocation(
   trx: Db,
   id: string,

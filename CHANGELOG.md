@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+### Spec 04 part 3 — Holes, snap, undo, parcels, and export
+
+- Hole, split, and merge edit the polygon the measurement routes already store. A hole is an interior ring, so the live area drops before save and the server still writes `deductions`. Snap is a Terra Draw toggle. Undo and redo are an editor snapshot stack for create, vertex edit, delete, and re-tag, plus hole, split, and merge. A saved delete is local until save. Save calls `DELETE /measurements/:id` for each persisted id that left the map, then PUTs the rest. Undo before that save leaves the row in place. ADR 0017. No migration.
+- The quantity summary toggles sum and union per item. A save shows the server's self-intersection corrections and same-item overlap warnings.
+- `GET /locations/:id/parcels?bbox=` lists cached parcels that intersect the bbox and sit within 2 km of the location, capped at 50. The editor can select more than one as a reference overlay. Measurements are not clipped. The fixture parcel adapter also returns the east and west lots. The subject parcel id is unchanged.
+- `GET /takeoffs/:id/export?format=geojson` is a FeatureCollection plus imagery provider, name, capture date, GSD, and attribution. `format=png` is a schematic site map rendered in the API with Node `zlib`. The stamp is drawn and stored in PNG text. It does not read a COG and does not call Google, Mapbox, or TiTiler. `renderSiteMap` is the function proposals can reuse.
+- Above 2,000 features the editor paints a simplified overlay and pauses drawing. `GET /takeoffs/:id/measurements/tiles/:z/:x/:y` returns GeoJSON for one Web Mercator tile, at most 500 features, and returns 429 after 30 calls in 10 seconds for that workspace in that process.
+- Playwright covers a hole that reduces area and undoes, undo and redo of a create, a vertex edit, a delete, and a re-tag, and selecting two parcels. A hole and its undo keep `source = ai_assist` on an accepted assist polygon. The spec files were not edited.
+
 ### Spec 05 part 2 — Assist acceptance in the editor
 
 - `GET /detections/:id`, `POST /detections/:id/accept`, and `POST /detections/:id/reject` review a succeeded run. Accept inserts area measurements with `source = ai_assist` and leaves every other measurement as it was. A review that keeps every draft is `accepted_all`. A review that leaves any draft, including discarding all of them, is `accepted_partial`. A second review is 409. Each mutation writes one `audit_log` row. ADR 0018. No new migration: `0012` already has the statuses and `accepted_measurement_id`. Migration `0014` stays unused.
 - The editor shows Assist, positive and negative points, a box drag, a working state, a dashed draft layer, and Accept / Refine / Discard when `workspace.features.ai_assist` is true. The controls are absent when it is false. The API still requires `GROUNDWORK_AI_ASSIST=1`. Refine starts a new assist request and rejects the previous run. Accept loads the new measurement on the existing map.
 - `pnpm test:takeoff` covers accept, reject, the state machine, and a cross-tenant 404. Playwright covers the hidden controls and prompt, refine, accept, then a vertex edit, using the mock CV service. The e2e job installs the CV and imagery venvs and starts the mock. No model is downloaded.
-- Hole cut and undo/redo on an accepted polygon wait for the map follow-up. This slice checks the vertex edit and the server summary.
 
 ### Spec 07 part 2 — Quantity sync, versions, and the estimate editor
 

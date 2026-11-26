@@ -1,18 +1,25 @@
+import type { GeoJsonPolygon } from "@groundwork/geo";
+import { createId } from "@groundwork/shared";
 import { Button, Dialog, DialogContent, SelectField } from "@groundwork/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { message } from "../crm/messages";
 import type { Location } from "../crm/types";
 import { useWorkspace } from "../crm/workspace";
 import { api } from "../session";
 import { AssistPanel } from "./assist-panel";
-import type { DrawApi } from "./editor-map";
+import { downloadTakeoff } from "./download";
+import { cutHole, holeTarget, mergeAreas, splitMeasurement } from "./edit-geometry";
+import type { DrawApi, SketchEvent } from "./editor-map";
 import { TakeoffMap } from "./editor-map";
+import { emptyHistory, pushHistory, redoHistory, snapshotCommand, undoHistory } from "./history";
 import { allowedCaptures, captureOptionLabel } from "./imagery";
 import { ImageryNotice } from "./notice";
-import { FeaturePanel, ItemPanel, SummaryDrawer, ToolBar } from "./panels";
+import { FeaturePanel, ItemPanel, MeasurementWarnings, SummaryDrawer, ToolBar } from "./panels";
+import type { ParcelHit } from "./parcels";
+import { ParcelSelect } from "./parcels";
 import {
   applyServer,
   editorFeaturesFrom,
@@ -22,6 +29,7 @@ import {
   mergeCommit,
   toLoadFeatures,
 } from "./quantities";
+import { DIRECT_FEATURE_LIMIT } from "./render-budget";
 import { useAssist } from "./use-assist";
 import type {
   CommitFeature,
@@ -90,7 +98,16 @@ export default function TakeoffEditorPage({
   const [pendingCapture, setPendingCapture] = useState<string | null>(null);
   const [switchWarnings, setSwitchWarnings] = useState<string[]>([]);
   const [switching, setSwitching] = useState(false);
+  const [snap, setSnap] = useState(false);
+  const [history, setHistory] = useState(emptyHistory);
+  const [savedNotices, setSavedNotices] = useState<{
+    corrections: number;
+    overlaps: number;
+  } | null>(null);
+  const [persistedIds, setPersistedIds] = useState<ReadonlySet<string>>(() => new Set());
   const apiRef = useRef<DrawApi | null>(null);
+  const featuresRef = useRef<EditorFeature[] | null>(null);
+  const itemsRef = useRef<TakeoffItemRow[]>([]);
   const toolRef = useRef(tool);
   const pendingLoad = useRef<ReturnType<typeof editorFeaturesFrom>["load"] | null>(null);
   const pendingSelect = useRef<string | null>(null);
@@ -101,13 +118,25 @@ export default function TakeoffEditorPage({
   }, [tool]);
 
   useEffect(() => {
+    featuresRef.current = features;
+  }, [features]);
+
+  useEffect(() => {
+    itemsRef.current = items.data?.items.filter((item) => item.archived_at === null) ?? [];
+  }, [items.data]);
+
+  useEffect(() => {
     if (seeded.current || !measurements.isSuccess || !items.isSuccess) {
       return;
     }
     seeded.current = true;
     const built = editorFeaturesFrom(measurements.data, items.data.items);
     pendingLoad.current = built.load;
+    featuresRef.current = built.features;
     setFeatures(built.features);
+    setPersistedIds(
+      new Set(built.features.filter((feature) => feature.server).map((feature) => feature.id)),
+    );
   }, [items.data, items.isSuccess, measurements.data, measurements.isSuccess]);
 
   useEffect(() => {
@@ -126,8 +155,21 @@ export default function TakeoffEditorPage({
   }, [features, mapReady]);
 
   useEffect(() => {
-    apiRef.current?.setMode(tool);
+    const api = apiRef.current;
+    if (!api) {
+      return;
+    }
+    api.setMode(tool);
+    if (tool === "select" && pendingSelect.current) {
+      const id = pendingSelect.current;
+      pendingSelect.current = null;
+      api.selectFeature(id);
+    }
   }, [tool, mapReady]);
+
+  useEffect(() => {
+    apiRef.current?.setSnap(snap);
+  }, [snap, mapReady]);
 
   const catalog = items.data?.items.filter((item) => item.archived_at === null) ?? [];
   const selectedItem = catalog.find((item) => item.id === selectedItemId) ?? null;
@@ -163,12 +205,20 @@ export default function TakeoffEditorPage({
         { type: "FeatureCollection", features: accepted, corrections: [], overlaps: [] },
         catalog,
       );
-      setFeatures((current) => {
-        const base = current ?? [];
-        const ids = new Set(base.map((feature) => feature.id));
-        const next = [...base, ...built.features.filter((feature) => !ids.has(feature.id))];
-        pendingLoad.current = toLoadFeatures(next, catalog);
-        return next;
+      const base = featuresRef.current ?? [];
+      const ids = new Set(base.map((feature) => feature.id));
+      const next = [...base, ...built.features.filter((feature) => !ids.has(feature.id))];
+      featuresRef.current = next;
+      pendingLoad.current = toLoadFeatures(next, catalog);
+      setFeatures(next);
+      setPersistedIds((current) => {
+        const ids = new Set(current);
+        for (const feature of next) {
+          if (feature.server) {
+            ids.add(feature.id);
+          }
+        }
+        return ids;
       });
       const first = built.features[0];
       if (first) {
@@ -198,13 +248,167 @@ export default function TakeoffEditorPage({
     }
   }
 
+  function remember(before: EditorFeature[], after: EditorFeature[]) {
+    const command = snapshotCommand(before, after, Date.now());
+    if (!command) {
+      return;
+    }
+    setHistory((current) => pushHistory(current, command));
+  }
+
+  function showFeatures(next: EditorFeature[]) {
+    featuresRef.current = next;
+    setFeatures(next);
+    apiRef.current?.load(toLoadFeatures(next, itemsRef.current));
+  }
+
   function onCommit(commit: CommitFeature[]) {
-    setFeatures((current) => (current === null ? current : mergeCommit(current, commit)));
+    const current = featuresRef.current;
+    if (!current) {
+      return;
+    }
+    const next = mergeCommit(current, commit);
+    remember(current, next);
+    featuresRef.current = next;
+    setFeatures(next);
     setSaveStatus("");
   }
 
+  function onUndo() {
+    const step = undoHistory(history);
+    if (!step) {
+      return;
+    }
+    setHistory(step.history);
+    showFeatures(step.features);
+    setSelectedFeatureId(null);
+  }
+
+  function onRedo() {
+    const step = redoHistory(history);
+    if (!step) {
+      return;
+    }
+    setHistory(step.history);
+    showFeatures(step.features);
+    setSelectedFeatureId(null);
+  }
+
+  function onSketch(event: SketchEvent) {
+    const current = featuresRef.current;
+    if (!current || takeoff.data?.status === "final") {
+      return;
+    }
+    if (event.intent === "hole" && event.geometry.type === "Polygon") {
+      const target = holeTarget(current, selectedFeatureId, event.geometry);
+      if (!target || target.geometry.type !== "Polygon") {
+        setError("Draw the hole inside an area.");
+        return;
+      }
+      const cut = cutHole(target.geometry, event.geometry);
+      if (!cut) {
+        setError("That hole must sit inside the area without crossing its outline.");
+        return;
+      }
+      const next = current.map((feature) =>
+        feature.id === target.id
+          ? { ...feature, geometry: cut, server: null, measuredKey: null }
+          : feature,
+      );
+      remember(current, next);
+      featuresRef.current = next;
+      setFeatures(next);
+      apiRef.current?.replaceGeometry(target.id, cut);
+      setError("");
+      return;
+    }
+    const selected = current.find((feature) => feature.id === selectedFeatureId);
+    if (!selected) {
+      setError("Select a measurement to split.");
+      return;
+    }
+    const parts = splitMeasurement(selected.geometry, event.geometry);
+    const first = parts?.[0];
+    const second = parts?.[1];
+    if (!first || !second) {
+      setError("The split line must cross that measurement.");
+      return;
+    }
+    const next = current.flatMap((feature) => {
+      if (feature.id !== selected.id) {
+        return [feature];
+      }
+      return [
+        { ...feature, geometry: first, server: null, measuredKey: null },
+        { ...feature, id: createId(), geometry: second, server: null, measuredKey: null },
+      ];
+    });
+    remember(current, next);
+    showFeatures(next);
+    setError("");
+  }
+
+  function onRetag(id: string, itemId: string) {
+    const feature = featuresRef.current?.find((row) => row.id === id);
+    const item = itemsRef.current.find((row) => row.id === itemId);
+    if (!feature || !item || item.measure_kind !== feature.kind) {
+      setError("That takeoff item measures a different kind.");
+      return;
+    }
+    apiRef.current?.setItem(id, {
+      itemId,
+      color: itemColor(item.color, itemsRef.current.indexOf(item)),
+      kind: feature.kind,
+    });
+    setError("");
+  }
+
+  function onMerge() {
+    const current = featuresRef.current;
+    const selected = current?.find((feature) => feature.id === selectedFeatureId);
+    if (!current || !selected || selected.geometry.type !== "Polygon") {
+      setError("Select an area to merge.");
+      return;
+    }
+    const other = current.find(
+      (feature) =>
+        feature.id !== selected.id &&
+        feature.itemId === selected.itemId &&
+        feature.geometry.type === "Polygon",
+    );
+    if (!other || other.geometry.type !== "Polygon") {
+      setError("Choose two areas of the same takeoff item to merge.");
+      return;
+    }
+    const merged = mergeAreas(selected.geometry, other.geometry as GeoJsonPolygon);
+    if (!merged) {
+      setError("Those areas do not touch, so they stay separate.");
+      return;
+    }
+    const next = current
+      .filter((feature) => feature.id !== other.id)
+      .map((feature) =>
+        feature.id === selected.id
+          ? { ...feature, geometry: merged, server: null, measuredKey: null }
+          : feature,
+      );
+    remember(current, next);
+    showFeatures(next);
+    setError("");
+  }
+
+  const onParcels = useCallback((rows: readonly { hit: ParcelHit; selected: boolean }[]) => {
+    apiRef.current?.setParcels(
+      rows.map((row) => ({ id: row.hit.id, selected: row.selected, geometry: row.hit.geom })),
+    );
+  }, []);
+
   function chooseTool(next: DrawTool) {
     setError("");
+    if ((featuresRef.current?.length ?? 0) > DIRECT_FEATURE_LIMIT && next !== "select") {
+      setError("This takeoff has more than 2,000 measurements. Editing stays paused.");
+      return;
+    }
     if (next === "polygon" || next === "linestring" || next === "point") {
       const kind = kindForMode(next);
       if (!selectedItem || selectedItem.measure_kind !== kind) {
@@ -223,6 +427,12 @@ export default function TakeoffEditorPage({
       assist.setPrompt("off");
     }
     setTool(next);
+    apiRef.current?.setMode(next);
+  }
+
+  function onSnapChange(enabled: boolean) {
+    setSnap(enabled);
+    apiRef.current?.setSnap(enabled);
   }
 
   function onAssistPrompt(mode: "positive" | "negative" | "box") {
@@ -234,11 +444,16 @@ export default function TakeoffEditorPage({
     setSelectedItemId(id);
     apiRef.current?.highlight(id);
     const first = features?.find((feature) => feature.itemId === id);
-    if (first) {
-      apiRef.current?.selectFeature(first.id);
-      setSelectedFeatureId(first.id);
-      setTool("select");
+    if (!first) {
+      return;
     }
+    setSelectedFeatureId(first.id);
+    if (tool === "select") {
+      apiRef.current?.selectFeature(first.id);
+      return;
+    }
+    pendingSelect.current = first.id;
+    setTool("select");
   }
 
   function onToggle(id: string, hidden: boolean) {
@@ -264,50 +479,60 @@ export default function TakeoffEditorPage({
     apiRef.current?.setLabel(id, next);
   }
 
-  async function onDelete(id: string) {
-    const feature = features?.find((row) => row.id === id);
+  function onDelete(id: string) {
+    const feature = featuresRef.current?.find((row) => row.id === id);
     if (!feature) {
       return;
     }
     setError("");
-    try {
-      if (feature.server) {
-        await api(`/measurements/${id}`, { method: "DELETE" });
-      }
-      apiRef.current?.remove(id);
-      setSelectedFeatureId((current) => (current === id ? null : current));
-      setSaveStatus("");
-      await client.invalidateQueries({ queryKey: ["takeoff-summary", takeoffId] });
-      await client.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
-    } catch (err) {
-      setError(message(err, "Could not delete that measurement."));
-    }
+    apiRef.current?.remove(id);
+    setSelectedFeatureId((current) => (current === id ? null : current));
+    setSaveStatus("");
   }
 
   async function onSave() {
-    if (!features || features.length === 0 || saving) {
+    const current = featuresRef.current;
+    if (!current || saving) {
+      return;
+    }
+    const removed = [...persistedIds].filter((id) => !current.some((feature) => feature.id === id));
+    if (current.length === 0 && removed.length === 0) {
       return;
     }
     setSaving(true);
     setError("");
     try {
-      const collection = await api<MeasurementCollection>(`/takeoffs/${takeoffId}/measurements`, {
-        method: "PUT",
-        body: JSON.stringify({
-          features: features.map((feature) => ({
-            id: feature.id,
-            takeoff_item_id: feature.itemId,
-            kind: feature.kind,
-            geom: measurementGeometry(feature.geometry),
-            source: feature.source,
-            label: feature.label,
-          })),
-        }),
-      });
-      const applied = applyServer(features, collection);
-      setFeatures(applied.features);
-      for (const feature of applied.replaced) {
-        apiRef.current?.replaceGeometry(feature.id, feature.geometry);
+      const kept = new Set(persistedIds);
+      for (const id of removed) {
+        await api(`/measurements/${id}`, { method: "DELETE" });
+        kept.delete(id);
+      }
+      setPersistedIds(new Set(kept));
+      if (current.length > 0) {
+        const collection = await api<MeasurementCollection>(`/takeoffs/${takeoffId}/measurements`, {
+          method: "PUT",
+          body: JSON.stringify({
+            features: current.map((feature) => ({
+              id: feature.id,
+              takeoff_item_id: feature.itemId,
+              kind: feature.kind,
+              geom: measurementGeometry(feature.geometry),
+              source: feature.source,
+              label: feature.label,
+            })),
+          }),
+        });
+        const applied = applyServer(current, collection);
+        setSavedNotices({
+          corrections: collection.corrections.length,
+          overlaps: collection.overlaps.length,
+        });
+        featuresRef.current = applied.features;
+        setFeatures(applied.features);
+        setPersistedIds(new Set(applied.features.map((feature) => feature.id)));
+        for (const feature of applied.replaced) {
+          apiRef.current?.replaceGeometry(feature.id, feature.geometry);
+        }
       }
       await client.invalidateQueries({ queryKey: ["takeoff-summary", takeoffId] });
       await client.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
@@ -383,6 +608,21 @@ export default function TakeoffEditorPage({
   }
 
   const captureId = takeoff.data.imagery_capture_id;
+  const pendingDeletes = [...persistedIds].filter(
+    (id) => !features.some((feature) => feature.id === id),
+  );
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+  const corrections = savedNotices?.corrections ?? measurements.data?.corrections.length ?? 0;
+  const overlaps = savedNotices?.overlaps ?? measurements.data?.overlaps.length ?? 0;
+  const throttled = features.length > DIRECT_FEATURE_LIMIT;
+  const canMerge = features.some(
+    (feature) =>
+      feature.id !== selectedFeatureId &&
+      feature.itemId === selectedFeature?.itemId &&
+      feature.geometry.type === "Polygon" &&
+      selectedFeature?.geometry.type === "Polygon",
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -431,10 +671,16 @@ export default function TakeoffEditorPage({
           ) : null}
           <ToolBar
             tool={tool}
-            readOnly={readOnly}
+            readOnly={readOnly || throttled}
             canFinish={mapReady && tool !== "select"}
+            snap={snap}
+            canUndo={canUndo}
+            canRedo={canRedo}
             onTool={chooseTool}
             onFinish={() => apiRef.current?.finish()}
+            onSnap={onSnapChange}
+            onUndo={onUndo}
+            onRedo={onRedo}
           />
           <p className="text-base">
             {selectedItem
@@ -442,8 +688,16 @@ export default function TakeoffEditorPage({
               : "Choose a polygon, line, or point tool to pick a takeoff item."}
           </p>
           <p className="max-w-prose text-base leading-relaxed">
-            Choose a tool, draw on the map, and press Finish shape or Enter. The ruler is not saved.
+            Choose a tool, draw on the map, and press Finish shape or Enter. Hole cuts an island out
+            of the selected area. Split crosses a selected measurement. The ruler is not saved.
           </p>
+          {throttled ? (
+            <p role="status">
+              More than 2,000 measurements. The map shows a simplified overlay and editing is
+              paused.
+            </p>
+          ) : null}
+          <MeasurementWarnings corrections={corrections} overlaps={overlaps} />
           <p className="text-sm text-muted">
             The parcel outline is a reference. Measurements are not clipped to it.
           </p>
@@ -490,6 +744,14 @@ export default function TakeoffEditorPage({
               onLive={setLive}
               onRuler={setRuler}
               onReject={setError}
+              onSketch={onSketch}
+            />
+          ) : null}
+          {takeoff.data.location_id ? (
+            <ParcelSelect
+              locationId={takeoff.data.location_id}
+              point={location.data?.point ?? null}
+              onChange={onParcels}
             />
           ) : null}
           <p role="status">
@@ -499,7 +761,9 @@ export default function TakeoffEditorPage({
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
-              disabled={readOnly || saving || features.length === 0}
+              disabled={
+                readOnly || saving || (features.length === 0 && pendingDeletes.length === 0)
+              }
               onClick={() => {
                 void onSave();
               }}
@@ -507,6 +771,28 @@ export default function TakeoffEditorPage({
               {saving ? "Saving measurements" : "Save measurements"}
             </Button>
             <SummaryDrawer items={summary.data?.items ?? []} />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                void downloadTakeoff(takeoffId, "geojson").catch((err: unknown) => {
+                  setError(message(err, "Could not export GeoJSON."));
+                });
+              }}
+            >
+              Export GeoJSON
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                void downloadTakeoff(takeoffId, "png").catch((err: unknown) => {
+                  setError(message(err, "Could not export the site map."));
+                });
+              }}
+            >
+              Export PNG
+            </Button>
           </div>
           {saveStatus ? (
             <p role="status" aria-label="Save result">
@@ -517,11 +803,15 @@ export default function TakeoffEditorPage({
         <FeaturePanel
           feature={selectedFeature}
           itemName={selectedFeatureItem?.name ?? null}
+          items={catalog}
           readOnly={readOnly}
+          canMerge={canMerge}
           onLabel={onLabel}
           onDelete={(id) => {
             void onDelete(id);
           }}
+          onRetag={onRetag}
+          onMerge={onMerge}
         />
       </div>
       <Dialog

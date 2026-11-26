@@ -89,6 +89,30 @@ export function summaryTotal(item: SummaryItem): string {
   return String(item.count ?? 0);
 }
 
+export type SummaryMode = "sum" | "union";
+
+export function summaryQuantity(item: SummaryItem, mode: SummaryMode): string {
+  return mode === "union" ? summaryUnion(item) : summaryTotal(item);
+}
+
+export function correctionNotice(count: number): string | null {
+  if (count <= 0) {
+    return null;
+  }
+  const noun = count === 1 ? "shape" : "shapes";
+  return `The server corrected ${count} self-intersecting ${noun}. The corrected outline is shown.`;
+}
+
+export function overlapNotice(count: number): string | null {
+  if (count <= 0) {
+    return null;
+  }
+  if (count === 1) {
+    return "One pair of measurements for the same item overlaps. The summary can use the union.";
+  }
+  return `${count} pairs of measurements for the same item overlap. The summary can use the union.`;
+}
+
 export function summaryUnion(item: SummaryItem): string {
   if (item.measure_kind === "area") {
     return item.display.union_ft2 ? `${item.display.union_ft2} ft²` : "—";

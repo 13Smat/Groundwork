@@ -37,8 +37,10 @@ import {
   getTakeoff,
   insertTakeoff,
   listFeatures,
+  listFeaturesInBbox,
   listOverlaps,
   listTakeoffsForJob,
+  loadImageryStamp,
   loadJob,
   locationExists,
   requireMeasurableCapture,
@@ -48,12 +50,17 @@ import {
   type StoredFeature,
   type TakeoffRecord,
 } from "./data.js";
+import { exportCollection, geometriesOf } from "./export-document.js";
+import { TILE_FEATURE_LIMIT, takeFeatureTile, tileToBBox } from "./feature-tiles.js";
 import {
   geometryMatchesKind,
   parseDeductions,
   parseGeometry,
   type MeasurementInput,
 } from "./geometry.js";
+import { renderSiteMap, type SiteMapStamp } from "./site-map.js";
+
+export { resetFeatureTileThrottle } from "./feature-tiles.js";
 
 const TENANT = ["tenant-header"] as const;
 
@@ -737,6 +744,93 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
         rejected_feature_ids: result.rejected_feature_ids,
         measurements: result.measurements.map(presentFeature),
       };
+    },
+  );
+
+  app.get(
+    "/takeoffs/:id/export",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        querystring: z.object({
+          format: z.enum(["geojson", "png"]).optional(),
+        }),
+        description:
+          "GeoJSON FeatureCollection or a PNG site map. Both carry the imagery provider, capture date, GSD, and attribution.",
+      },
+    },
+    async (request, reply) => {
+      const format = request.query.format ?? "geojson";
+      const exported = await inWorkspace(request, "read", async ({ trx }) => {
+        const takeoff = await getTakeoff(trx, request.params.id);
+        const features = await listFeatures(trx, takeoff.id);
+        const stamp = takeoff.imagery_capture_id
+          ? ((await loadImageryStamp(trx, takeoff.imagery_capture_id)) ?? null)
+          : null;
+        return { features, stamp };
+      });
+      if (format === "png") {
+        const stamp: SiteMapStamp | null = exported.stamp
+          ? {
+              provider: exported.stamp.provider,
+              name: exported.stamp.name,
+              captureDate: exported.stamp.capture_date,
+              gsdCm: exported.stamp.gsd_cm,
+              attribution: exported.stamp.attribution,
+            }
+          : null;
+        const png = renderSiteMap(geometriesOf(exported.features), stamp);
+        return reply
+          .type("image/png")
+          .header("content-disposition", 'attachment; filename="takeoff.png"')
+          .send(png);
+      }
+      return reply
+        .type("application/geo+json")
+        .header("content-disposition", 'attachment; filename="takeoff.geojson"')
+        .send(exportCollection(exported.features, exported.stamp));
+    },
+  );
+
+  app.get(
+    "/takeoffs/:id/measurements/tiles/:z/:x/:y",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: z.object({
+          id: z.uuidv7(),
+          z: z.coerce.number().int().min(0).max(22),
+          x: z.coerce.number().int().min(0),
+          y: z.coerce.number().int().min(0),
+        }),
+        response: { 200: collectionSchema },
+        description:
+          "Measurements intersecting one Web Mercator tile. Requests are throttled per workspace.",
+      },
+    },
+    async (request) => {
+      const bbox = tileToBBox(request.params.z, request.params.x, request.params.y);
+      if (!bbox) {
+        throw badRequest("That tile is outside the world.");
+      }
+      return inWorkspace(request, "read", async ({ trx, workspaceId }) => {
+        await getTakeoff(trx, request.params.id);
+        if (!takeFeatureTile(workspaceId)) {
+          throw new ProblemError({
+            status: 429,
+            title: "Too Many Requests",
+            detail: "Measurement tile requests are throttled. Wait and try that tile again.",
+          });
+        }
+        const features = await listFeaturesInBbox(trx, request.params.id, bbox, TILE_FEATURE_LIMIT);
+        return {
+          type: "FeatureCollection" as const,
+          features: features.map(presentFeature),
+          corrections: [],
+          overlaps: [],
+        };
+      });
     },
   );
 

@@ -85,6 +85,38 @@ async function expectMapReady(page: Page, logs: readonly string[]): Promise<void
   }
 }
 
+async function liveFeet(page: Page): Promise<number> {
+  const text = await page
+    .getByText(/Live total \d+ ft²/)
+    .first()
+    .innerText();
+  const match = text.match(/Live total (\d+) ft²/);
+  if (!match?.[1]) {
+    throw new Error(`No live area in "${text}".`);
+  }
+  return Number(match[1]);
+}
+
+async function openEditor(page: Page, logs: readonly string[]): Promise<void> {
+  await page.getByRole("tab", { name: "Takeoffs" }).click();
+  await expect(page.getByRole("heading", { name: "Takeoffs" })).toBeVisible();
+  await page.getByRole("button", { name: "New takeoff" }).click();
+  await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
+  await expectMapReady(page, logs);
+}
+
+async function drawSquare(page: Page): Promise<void> {
+  await page.getByRole("radio", { name: "Polygon" }).click();
+  await expect(page.getByText("Drawing Aggregate base.")).toBeVisible();
+  await clickMap(page, 0.35, 0.4);
+  await clickMap(page, 0.62, 0.4);
+  await clickMap(page, 0.62, 0.62);
+  await clickMap(page, 0.35, 0.62);
+  await clickMap(page, 0.35, 0.4);
+  await page.getByRole("button", { name: "Finish shape" }).click();
+  await expect(page.getByText(/Live total \d+ ft²/)).toBeVisible();
+}
+
 async function clickMap(page: Page, x: number, y: number): Promise<void> {
   const canvas = page.getByLabel("Takeoff drawing surface");
   await canvas.scrollIntoViewIfNeeded();
@@ -208,4 +240,144 @@ test("a site outside North Carolina shows the NAIP banner", async ({ page }) => 
   const labels = await page.getByLabel("Imagery capture").locator("option").allTextContents();
   expect(labels.join("\n")).toMatch(/NAIP/);
   expect(labels.join("\n")).not.toMatch(/Helene|NC Ortho/);
+});
+
+test("a hole cuts area out of the selected polygon", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Hole Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Hole Homes");
+  await openEditor(page, logs);
+  const snap = page.getByRole("checkbox", { name: "Snap to vertices and edges" });
+  await snap.check();
+  await expect(snap).toBeChecked();
+  await snap.uncheck();
+  await drawSquare(page);
+  const before = await liveFeet(page);
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("radio", { name: "Hole" }).click();
+  await expect(page.getByRole("radio", { name: "Hole" })).toBeChecked();
+  await clickMap(page, 0.42, 0.46);
+  await clickMap(page, 0.55, 0.46);
+  await clickMap(page, 0.55, 0.56);
+  await clickMap(page, 0.42, 0.56);
+  await clickMap(page, 0.42, 0.46);
+  await page.getByRole("button", { name: "Finish shape" }).click();
+  await expect.poll(() => liveFeet(page)).toBeLessThan(before);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => liveFeet(page)).toBe(before);
+});
+
+test("undo and redo restore a create, a vertex edit, a delete, and a re-tag", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Undo Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Undo Homes");
+  await openEditor(page, logs);
+  await drawSquare(page);
+  const drawn = await liveFeet(page);
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect.poll(() => liveFeet(page)).toBe(drawn);
+
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await expect(page.getByRole("radio", { name: "Select" })).toBeChecked();
+  await clickMap(page, 0.48, 0.51);
+  const canvas = page.getByLabel("Takeoff drawing surface");
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error("The takeoff map has no box.");
+  }
+  const x = box.x + box.width * 0.62;
+  const y = box.y + box.height * 0.4;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + box.height * 0.22, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(() => liveFeet(page)).not.toBe(drawn);
+  const edited = await liveFeet(page);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => liveFeet(page)).toBe(drawn);
+
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("button", { name: "Delete measurement" }).click();
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => liveFeet(page)).toBe(drawn);
+
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  const item = page.locator("#measurement-item");
+  await item.selectOption({ label: "Asphalt surface" });
+  await expect(item.locator("option:checked")).toHaveText("Asphalt surface");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await expect(item.locator("option:checked")).toHaveText("Aggregate base");
+  expect(edited).not.toBe(drawn);
+  expect(logs.filter((line) => line.startsWith("pageerror:"))).toEqual([]);
+});
+
+test("a saved delete stays gone after save and reload", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Delete Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Delete Homes");
+  await openEditor(page, logs);
+  await drawSquare(page);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await page.getByRole("radio", { name: "Select" }).click();
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("button", { name: "Delete measurement" }).click();
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
+  await expectMapReady(page, logs);
+  await expect(page.getByText(/Live total \d+ ft²/)).toHaveCount(0);
+  await expect(page.getByText(/Server total \d+ ft²/)).toHaveCount(0);
+});
+
+test("undo of a delete before save keeps the measurement", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Undo Delete Owner");
+  await loadStarter(page);
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Undo Delete Homes");
+  await openEditor(page, logs);
+  await drawSquare(page);
+  await page.getByRole("button", { name: "Save measurements" }).click();
+  await expect(page.getByLabel("Save result")).toContainText("Saved");
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+  await page.getByRole("radio", { name: "Select" }).click();
+  await page.getByRole("button", { name: "Aggregate base" }).click();
+  await page.getByRole("button", { name: "Delete measurement" }).click();
+  await expect(page.getByText(/Server total \d+ ft²/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
+  await expectMapReady(page, logs);
+  await expect(page.getByText(/Server total \d+ ft²/)).toBeVisible();
+});
+
+test("selects more than one parcel in view", async ({ page }) => {
+  test.setTimeout(120_000);
+  const logs = watchPage(page);
+  await signUp(page, "Parcel Owner");
+  await createJob(page, "100 Main St, Morganton, NC 28655", "Parcel Homes");
+  await openEditor(page, logs);
+  await page.getByRole("button", { name: "Select parcels" }).click();
+  const boxes = page.getByRole("checkbox", { name: /Select parcel / });
+  await expect(boxes.first()).toBeVisible();
+  expect(await boxes.count()).toBeGreaterThanOrEqual(3);
+  await boxes.nth(0).check();
+  await boxes.nth(1).check();
+  await expect(page.getByText("2 parcels selected")).toBeVisible();
 });
