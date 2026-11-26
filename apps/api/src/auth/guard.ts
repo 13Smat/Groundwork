@@ -82,3 +82,18 @@ export async function requireActiveMember(
   }
   return member;
 }
+
+/**
+ * Imagery source edits and ingest. Spec 04 calls the screen internal admin and
+ * does not name a system role. Owner and admin are the workspace administration
+ * roles. ADR 0008.
+ */
+export function requireImageryAdmin(member: { role: string }): void {
+  if (member.role !== "owner" && member.role !== "admin") {
+    throw new ProblemError({
+      status: 403,
+      title: "Forbidden",
+      detail: "Imagery sources and ingest require the owner or admin role.",
+    });
+  }
+}

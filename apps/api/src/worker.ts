@@ -1,4 +1,4 @@
-import { loadLocalEnv, readDatabaseUrl, redactDatabaseUrl } from "./config.js";
+import { loadLocalEnv, readAppDatabaseUrl, readDatabaseUrl, redactDatabaseUrl } from "./config.js";
 import { createLogger } from "./logging.js";
 import { startTelemetry } from "./telemetry.js";
 
@@ -7,6 +7,8 @@ const telemetry = startTelemetry();
 const logger = createLogger("worker");
 
 const { startQueue } = await import("./queue.js");
+const { createDb, createPool } = await import("./db/client.js");
+const { registerImageryIngestWorker } = await import("./imagery/queue.js");
 
 let stopping = false;
 
@@ -22,15 +24,22 @@ async function shutdown(boss: Awaited<ReturnType<typeof startQueue>>): Promise<v
 
 try {
   const databaseUrl = readDatabaseUrl();
+  const appPool = createPool(readAppDatabaseUrl());
   const boss = await startQueue(databaseUrl, (error) => {
     logger.error({ err: error }, "pg-boss error");
   });
+  await registerImageryIngestWorker(boss, createDb(appPool));
   logger.info({ database: redactDatabaseUrl(databaseUrl) }, "worker ready");
+  const stop = async (): Promise<void> => {
+    await shutdown(boss);
+    await appPool.end();
+    process.exit(0);
+  };
   process.on("SIGINT", () => {
-    void shutdown(boss).then(() => process.exit(0));
+    void stop();
   });
   process.on("SIGTERM", () => {
-    void shutdown(boss).then(() => process.exit(0));
+    void stop();
   });
 } catch (error) {
   logger.error({ err: error }, "worker failed to start");

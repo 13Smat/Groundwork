@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Python venv module
+        run: sudo apt-get update && sudo apt-get install -y python3-venv
+
       - name: Check
         run: pnpm check
 
@@ -170,6 +173,11 @@ jobs:
           DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
           APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
           APP_DB_PASSWORD: groundwork
+
+      - name: Imagery ingest unit tests
+        run: |
+          sudo apt-get update && sudo apt-get install -y python3-venv
+          pnpm test:imagery-ingest
 
       - name: Imagery and TiTiler
         run: pnpm test:imagery

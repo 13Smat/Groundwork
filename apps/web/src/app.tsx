@@ -24,7 +24,8 @@ import {
   WorkspaceSwitcher,
   signOut,
 } from "./pages";
-import { loadMe, queryClient, rememberNext } from "./session";
+import { ImageryRoute } from "./admin/imagery-route";
+import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
 
 const NAV = [
   { to: "/", label: "Office" },
@@ -38,6 +39,7 @@ const NAV = [
   { to: "/settings", label: "Settings" },
   { to: "/members", label: "Members" },
   { to: "/roles", label: "Roles" },
+  { to: "/admin/imagery", label: "Imagery" },
 ] as const;
 
 type OfficePath = (typeof NAV)[number]["to"];
@@ -54,6 +56,7 @@ const TITLES: Record<OfficePath, string> = {
   "/settings": "Settings",
   "/members": "Members",
   "/roles": "Roles",
+  "/admin/imagery": "Imagery sources",
 };
 
 function titleFor(pathname: string): string {
@@ -82,10 +85,13 @@ function OfficeLink({
   );
 }
 
-function OfficeNav({ pathname }: { pathname: string }) {
+function OfficeNav({ pathname, role }: { pathname: string; role: string | undefined }) {
+  const items = NAV.filter(
+    (item) => item.to !== "/admin/imagery" || role === "owner" || role === "admin",
+  );
   return (
     <PrimaryNav
-      items={NAV.map((item) => ({ href: item.to, label: item.label }))}
+      items={items.map((item) => ({ href: item.to, label: item.label }))}
       currentPath={pathname}
       renderLink={OfficeLink}
     />
@@ -154,10 +160,11 @@ const authedRoute = createRoute({
     const pathname = useRouterState({ select: (state) => state.location.pathname });
     const navigate = useNavigate();
     const profile = useQuery({ queryKey: ["me"], queryFn: loadMe });
+    const role = profile.data ? activeWorkspace(profile.data)?.role : undefined;
     return (
       <AppShell
         title={titleFor(pathname)}
-        nav={<OfficeNav pathname={pathname} />}
+        nav={<OfficeNav pathname={pathname} role={role} />}
         actions={
           <>
             {profile.data ? <WorkspaceSwitcher me={profile.data} /> : null}
@@ -239,6 +246,12 @@ const rolesRoute = createRoute({
   component: RolesPage,
 });
 
+const imageryAdminRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/admin/imagery",
+  component: ImageryRoute,
+});
+
 const createWorkspaceRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/workspaces/new",
@@ -269,6 +282,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     membersRoute,
     rolesRoute,
+    imageryAdminRoute,
     createWorkspaceRoute,
     acceptRoute,
   ]),
