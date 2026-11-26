@@ -1,9 +1,4 @@
-import {
-  CATALOG_VISIBILITY_SAMPLE,
-  SYSTEM_ROLE_PERMISSIONS,
-  createId,
-  type SystemRoleName,
-} from "@groundwork/shared";
+import { SYSTEM_ROLE_PERMISSIONS, createId, type SystemRoleName } from "@groundwork/shared";
 import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -28,6 +23,21 @@ const TENANT_ROUTES = [
   "post /workspaces/{id}/invites",
   "patch /members/{id}",
   "get /catalog-items",
+  "post /catalog-items",
+  "patch /catalog-items/{id}",
+  "delete /catalog-items/{id}",
+  "post /catalog-items/import",
+  "get /catalog-items/export",
+  "get /takeoff-items",
+  "post /takeoff-items",
+  "patch /takeoff-items/{id}",
+  "get /cost-recipes",
+  "post /cost-recipes",
+  "get /cost-recipes/{id}",
+  "patch /cost-recipes/{id}",
+  "post /cost-recipes/{id}/versions",
+  "post /cost-recipes/{id}/preview",
+  "post /formula/validate",
   "get /admin/imagery-sources",
   "post /admin/imagery-sources",
   "patch /admin/imagery-sources/{sourceId}",
@@ -198,6 +208,89 @@ async function invite(
     payload: { email, roleId: role },
   });
   return { status: response.statusCode, body: response.json() };
+}
+
+function tenantPayload(
+  key: string,
+  roleId: string | undefined,
+): Record<string, unknown> | undefined {
+  switch (key) {
+    case "post /workspaces/{id}/invites":
+      return { email: "nobody@example.com", roleId };
+    case "patch /workspaces/{id}":
+      return { name: "Nope" };
+    case "patch /members/{id}":
+      return { status: "disabled" };
+    case "post /catalog-items":
+      return {
+        kind: "material",
+        name: "Nope",
+        unit: "ton",
+        unit_cost_cents: 1,
+        unit_price_cents: 2,
+      };
+    case "patch /catalog-items/{id}":
+      return { name: "Nope" };
+    case "post /catalog-items/import":
+      return {
+        csv: "sku,kind,name,unit,unit_cost_cents,unit_price_cents,waste_pct,vendor,tax_code\n",
+        apply: false,
+      };
+    case "post /takeoff-items":
+      return { name: "Nope", measure_kind: "area", default_unit: "ft2" };
+    case "patch /takeoff-items/{id}":
+      return { name: "Nope" };
+    case "post /cost-recipes":
+      return { name: "Nope", input_unit: "ft2" };
+    case "patch /cost-recipes/{id}":
+      return { name: "Nope" };
+    case "post /cost-recipes/{id}/versions":
+      return {};
+    case "post /cost-recipes/{id}/preview":
+      return { input_qty: "1", input_unit: "ft2" };
+    case "post /formula/validate":
+      return { formula: "qty", variables: [] };
+    case "post /clients":
+      return { name: "Hidden", type: "residential" };
+    case "patch /clients/{id}":
+      return { name: "Hidden" };
+    case "post /clients/{id}/contacts":
+      return { name: "Hidden" };
+    case "patch /contacts/{id}":
+      return { name: "Hidden" };
+    case "post /locations":
+      return { client_id: createId(), address: { line1: "1 Main St" } };
+    case "patch /locations/{id}":
+      return { notes: "no" };
+    case "post /locations/resolve":
+      return { address: "100 Main St, Morganton, NC 28655" };
+    case "post /jobs":
+      return { name: "Hidden", client: { name: "Hidden", type: "residential" } };
+    case "patch /jobs/{id}":
+      return { name: "Hidden" };
+    case "post /jobs/{id}/transition":
+      return { to: "lost", reason: "price" };
+    case "post /jobs/{id}/notes":
+      return { body: "note" };
+    case "post /jobs/{id}/tasks":
+      return { title: "task" };
+    case "post /jobs/{id}/files":
+      return { mime: "image/png" };
+    case "post /imagery/ingest":
+      return { sourceId: createId(), year: 2026, countyFips: "37023" };
+    case "post /admin/imagery-sources":
+      return {
+        provider: "other",
+        name: "Nope",
+        bands: "RGB",
+        allowsTracing: false,
+        allowsMlTraining: false,
+      };
+    case "patch /admin/imagery-sources/{sourceId}":
+      return { notes: "Nope" };
+    default:
+      return undefined;
+  }
 }
 
 async function accept(cookie: string, token: string): Promise<{ status: number; body: unknown }> {
@@ -513,6 +606,24 @@ describe("auth and workspaces", () => {
     );
     expect((await accept(estimator.cookie, estimatorInvite.body.id)).status).toBe(200);
     expect((await accept(office.cookie, officeInvite.body.id)).status).toBe(200);
+    const created = await requireApp().inject({
+      method: "POST",
+      url: "/catalog-items",
+      headers: {
+        ...BROWSER,
+        cookie: owner.cookie,
+        "x-workspace-id": workspace.id,
+        "content-type": "application/json",
+      },
+      payload: {
+        kind: "material",
+        name: "Sample asphalt",
+        unit: "ton",
+        unit_cost_cents: 9200,
+        unit_price_cents: 18500,
+      },
+    });
+    expect(created.statusCode, created.body).toBe(201);
 
     async function items(cookie: string) {
       const response = await requireApp().inject({
@@ -521,16 +632,18 @@ describe("auth and workspaces", () => {
         headers: { ...BROWSER, cookie, "x-workspace-id": workspace.id },
       });
       expect(response.statusCode, response.body).toBe(200);
-      return response.json().items[0];
+      return response.json().items.find((item: { name: string }) => item.name === "Sample asphalt");
     }
 
     const ownerItem = await items(owner.cookie);
     const estimatorItem = await items(estimator.cookie);
     const officeItem = await items(office.cookie);
-    expect(ownerItem).toMatchObject(CATALOG_VISIBILITY_SAMPLE);
+    expect(ownerItem.unit_cost_cents).toBe(9200);
+    expect(ownerItem.unit_price_cents).toBe(18500);
     expect(estimatorItem.unit_cost_cents).toBe(9200);
     expect(officeItem.unit_price_cents).toBe(18500);
     expect(officeItem).not.toHaveProperty("unit_cost_cents");
+    expect(JSON.stringify(officeItem)).not.toContain("unit_cost");
   });
 
   it("returns 404 for every tenant route when the caller is not a member", async () => {
@@ -554,7 +667,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
@@ -607,57 +720,3 @@ describe("auth and workspaces", () => {
     expect(outsiderProfile.body.memberships[0]?.workspace_id).toBe(other.id);
   });
 });
-
-function tenantPayload(
-  key: string,
-  roleId: string | undefined,
-): Record<string, unknown> | undefined {
-  switch (key) {
-    case "post /workspaces/{id}/invites":
-      return { email: "nobody@example.com", roleId };
-    case "patch /workspaces/{id}":
-      return { name: "Nope" };
-    case "patch /members/{id}":
-      return { status: "disabled" };
-    case "post /clients":
-      return { name: "Hidden", type: "residential" };
-    case "patch /clients/{id}":
-      return { name: "Hidden" };
-    case "post /clients/{id}/contacts":
-      return { name: "Hidden" };
-    case "patch /contacts/{id}":
-      return { name: "Hidden" };
-    case "post /locations":
-      return { client_id: createId(), address: { line1: "1 Main St" } };
-    case "patch /locations/{id}":
-      return { notes: "no" };
-    case "post /locations/resolve":
-      return { address: "100 Main St, Morganton, NC 28655" };
-    case "post /jobs":
-      return { name: "Hidden", client: { name: "Hidden", type: "residential" } };
-    case "patch /jobs/{id}":
-      return { name: "Hidden" };
-    case "post /jobs/{id}/transition":
-      return { to: "lost", reason: "price" };
-    case "post /jobs/{id}/notes":
-      return { body: "note" };
-    case "post /jobs/{id}/tasks":
-      return { title: "task" };
-    case "post /jobs/{id}/files":
-      return { mime: "image/png" };
-    case "post /imagery/ingest":
-      return { sourceId: createId(), year: 2026, countyFips: "37023" };
-    case "post /admin/imagery-sources":
-      return {
-        provider: "other",
-        name: "Nope",
-        bands: "RGB",
-        allowsTracing: false,
-        allowsMlTraining: false,
-      };
-    case "patch /admin/imagery-sources/{sourceId}":
-      return { notes: "Nope" };
-    default:
-      return undefined;
-  }
-}

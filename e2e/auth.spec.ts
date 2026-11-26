@@ -30,7 +30,9 @@ test("an owner can invite a member from the members page", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await page.getByLabel("Company name").fill("Riley Paving");
   await page.getByRole("button", { name: "Create workspace" }).click();
+  await expect(page.getByText("No jobs yet")).toBeVisible();
   await page.getByRole("link", { name: "Members" }).click();
+  await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
 
   const invite = `crew-${Date.now()}@example.com`;
   await page.getByLabel("Email").fill(invite);

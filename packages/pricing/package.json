@@ -15,5 +15,9 @@
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^5.1.2"
+  },
+  "dependencies": {
+    "@groundwork/geo": "workspace:*",
+    "decimal.js": "10.6.0"
   }
 }

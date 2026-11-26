@@ -4,3 +4,15 @@ export const GEO_PACKAGE = "@groundwork/geo" as const;
 export function geoPackageName(): string {
   return GEO_PACKAGE;
 }
+
+export {
+  conversionRatio,
+  measureKindOfUnit,
+  normalizeUnit,
+  unitRatio,
+  UnitMismatchError,
+  unitsShareKind,
+  UnknownUnitError,
+  type MeasureKind,
+  type UnitRatio,
+} from "./units.js";
