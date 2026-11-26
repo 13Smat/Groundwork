@@ -25,6 +25,9 @@ import {
   signOut,
 } from "./pages";
 import { ImageryRoute } from "./admin/imagery-route";
+import { CatalogRoute } from "./catalog/catalog-route";
+import { RecipeCreateRoute, RecipeEditorRoute, RecipeIndexRoute } from "./catalog/recipe-route";
+import { TakeoffRoute } from "./catalog/takeoff-route";
 import { ClientDetailPage } from "./crm/client-detail-page";
 import { ClientsPage } from "./crm/clients-page";
 import { JobCreatePage } from "./crm/job-create-page";
@@ -77,6 +80,12 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith("/invites/")) {
     return "Accept invite";
   }
+  if (pathname.startsWith("/catalog/recipes")) {
+    return "Cost recipes";
+  }
+  if (pathname === "/catalog/takeoff") {
+    return "Takeoff items";
+  }
   if (pathname === "/jobs/new") {
     return "New job";
   }
@@ -101,6 +110,9 @@ function sectionPath(pathname: string): string {
   }
   if (pathname.startsWith("/clients") || pathname.startsWith("/locations")) {
     return "/clients";
+  }
+  if (pathname.startsWith("/catalog")) {
+    return "/catalog";
   }
   return pathname;
 }
@@ -279,7 +291,34 @@ const takeoffRoute = createRoute({
 const catalogRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/catalog",
-  component: placeholder("No catalog records are loaded in this slice."),
+  component: CatalogRoute,
+});
+
+const takeoffItemsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/takeoff",
+  component: TakeoffRoute,
+});
+
+const recipeIndexRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes",
+  component: RecipeIndexRoute,
+});
+
+const recipeCreateRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes/new",
+  component: RecipeCreateRoute,
+});
+
+const recipeEditRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/catalog/recipes/$recipeId",
+  component: function RecipeEditPage() {
+    const { recipeId } = recipeEditRoute.useParams();
+    return <RecipeEditorRoute recipeId={recipeId} />;
+  },
 });
 
 const estimatesRoute = createRoute({
@@ -359,6 +398,10 @@ const routeTree = rootRoute.addChildren([
     locationRoute,
     takeoffRoute,
     catalogRoute,
+    takeoffItemsRoute,
+    recipeIndexRoute,
+    recipeCreateRoute,
+    recipeEditRoute,
     estimatesRoute,
     proposalsRoute,
     scheduleRoute,

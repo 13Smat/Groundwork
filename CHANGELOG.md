@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Spec 06 part 2 — Catalog grid, recipe builder, and starter pack
+
+- The office catalog screen has a tab per kind, an inline grid, and a detail drawer. Arrow keys move between cells. Roles without `catalog.manage` do not see the unit cost column, and the grid is read only for them.
+- CSV import previews SKU adds and updates before apply. Export downloads the same columns the API already writes.
+- Takeoff items can be added and edited (name, measure kind, default unit, color, category).
+- The recipe builder edits the input unit, variables, and component formulas. `POST /formula/validate` reports the error and its position next to the formula. A test quantity calls `POST /cost-recipes/:id/preview`. Saving an active recipe opens version n+1 as a draft and leaves the previous version as it was. Activating a draft uses the existing transition.
+- `db/seed/starter-pack.json` is a clean-room paving and landscaping pack. `POST /catalog-items/starter-pack` inserts it for the current workspace and skips rows that are already there. Recipes start as drafts. ADR 0011.
+- Playwright covers formula validation, live preview, versioning, the CSV diff, and an office member versus an estimator on unit cost.
+
 ### Spec 04 part 1 — Takeoff and measurement model
 
 - Added `0009_takeoff.sql` for `takeoff` and `measurement`. Tenant row security is forced. `groundwork_app` is the only grantee. `takeoff_item` from `0006` is referenced and is not recreated. ADR 0013.

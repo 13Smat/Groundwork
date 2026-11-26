@@ -29,10 +29,21 @@ export default defineConfig({
       "/auth": proxy,
       "/me": proxy,
       "/workspaces": proxy,
-      "/invites": proxy,
+      // The office app owns GET /invites/:token. Only the accept POST is the API.
+      "/invites": {
+        ...proxy,
+        bypass(req: { method?: string }) {
+          if (req.method === "GET") {
+            return "/index.html";
+          }
+        },
+      },
       "/members": proxy,
       "/roles": proxy,
       "/catalog-items": proxy,
+      "/takeoff-items": proxy,
+      "/cost-recipes": proxy,
+      "/formula": proxy,
       "/clients": proxy,
       "/contacts": proxy,
       "/locations": proxy,

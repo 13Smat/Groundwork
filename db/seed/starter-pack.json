@@ -1,0 +1,404 @@
+{
+  "catalog": [
+    {
+      "sku": "GW-MAT-HMA",
+      "kind": "material",
+      "name": "Hot-mix asphalt",
+      "unit": "ton",
+      "unit_cost_cents": 9000,
+      "unit_price_cents": 12600,
+      "waste_pct": "5",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-BASE",
+      "kind": "material",
+      "name": "Crushed aggregate base",
+      "unit": "ton",
+      "unit_cost_cents": 2800,
+      "unit_price_cents": 3920,
+      "waste_pct": "8",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-TACK",
+      "kind": "material",
+      "name": "Tack coat",
+      "unit": "gal",
+      "unit_cost_cents": 450,
+      "unit_price_cents": 630,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-CONC",
+      "kind": "material",
+      "name": "Ready-mix concrete",
+      "unit": "yd3",
+      "unit_cost_cents": 16000,
+      "unit_price_cents": 22400,
+      "waste_pct": "5",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-SOD",
+      "kind": "material",
+      "name": "Turf sod",
+      "unit": "yd2",
+      "unit_cost_cents": 650,
+      "unit_price_cents": 910,
+      "waste_pct": "10",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-MULCH",
+      "kind": "material",
+      "name": "Shredded bark mulch",
+      "unit": "yd3",
+      "unit_cost_cents": 4500,
+      "unit_price_cents": 6300,
+      "waste_pct": "5",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-MAT-SHRUB",
+      "kind": "material",
+      "name": "Container shrub",
+      "unit": "ea",
+      "unit_cost_cents": 1800,
+      "unit_price_cents": 2520,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-LAB-PAVE",
+      "kind": "labor",
+      "name": "Paving crew",
+      "unit": "hr",
+      "unit_cost_cents": 8500,
+      "unit_price_cents": 11900,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-LAB-LAND",
+      "kind": "labor",
+      "name": "Landscape crew",
+      "unit": "hr",
+      "unit_cost_cents": 6500,
+      "unit_price_cents": 9100,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-LAB-CONC",
+      "kind": "labor",
+      "name": "Concrete crew",
+      "unit": "hr",
+      "unit_cost_cents": 8000,
+      "unit_price_cents": 11200,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-EQ-ROLL",
+      "kind": "equipment",
+      "name": "Compaction roller",
+      "unit": "hr",
+      "unit_cost_cents": 4500,
+      "unit_price_cents": 6300,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-EQ-SKID",
+      "kind": "equipment",
+      "name": "Skid steer",
+      "unit": "hr",
+      "unit_cost_cents": 5500,
+      "unit_price_cents": 7700,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-SUB-MARK",
+      "kind": "sub",
+      "name": "Pavement marking",
+      "unit": "ft",
+      "unit_cost_cents": 250,
+      "unit_price_cents": 350,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    },
+    {
+      "sku": "GW-FEE-MOB",
+      "kind": "fee",
+      "name": "Mobilization",
+      "unit": "ea",
+      "unit_cost_cents": 25000,
+      "unit_price_cents": 35000,
+      "waste_pct": "0",
+      "vendor": null,
+      "tax_code": null
+    }
+  ],
+  "takeoff": [
+    {
+      "name": "Asphalt surface",
+      "measure_kind": "area",
+      "default_unit": "ft2",
+      "category": "paving",
+      "color": "#2c2c2c"
+    },
+    {
+      "name": "Aggregate base",
+      "measure_kind": "area",
+      "default_unit": "ft2",
+      "category": "paving",
+      "color": "#7a756c"
+    },
+    {
+      "name": "Concrete walk",
+      "measure_kind": "area",
+      "default_unit": "ft2",
+      "category": "concrete",
+      "color": "#c8c8c8"
+    },
+    {
+      "name": "Concrete curb",
+      "measure_kind": "length",
+      "default_unit": "ft",
+      "category": "concrete",
+      "color": "#8d8d8d"
+    },
+    {
+      "name": "Sod area",
+      "measure_kind": "area",
+      "default_unit": "ft2",
+      "category": "landscape",
+      "color": "#3f6b3a"
+    },
+    {
+      "name": "Mulch bed",
+      "measure_kind": "area",
+      "default_unit": "ft2",
+      "category": "landscape",
+      "color": "#6a4332"
+    },
+    {
+      "name": "Shrub planting",
+      "measure_kind": "count",
+      "default_unit": "ea",
+      "category": "landscape",
+      "color": "#2f5d34"
+    },
+    {
+      "name": "Pavement marking",
+      "measure_kind": "length",
+      "default_unit": "ft",
+      "category": "striping",
+      "color": "#f2c200"
+    },
+    {
+      "name": "Site mobilization",
+      "measure_kind": "count",
+      "default_unit": "ea",
+      "category": "other",
+      "color": "#1c1915"
+    }
+  ],
+  "recipes": [
+    {
+      "name": "Asphalt surface",
+      "takeoff_name": "Asphalt surface",
+      "input_unit": "ft2",
+      "variables": {
+        "depth_in": "2",
+        "density_lb_ft3": "145",
+        "waste_pct": "5",
+        "tack_gal_per_yd2": "0.1",
+        "pave_yd2_per_hr": "45"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-HMA",
+          "qty_formula": "area_ft2 * (depth_in / 12) * density_lb_ft3 / 2000 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-MAT-TACK",
+          "qty_formula": "area_yd2 * tack_gal_per_yd2"
+        },
+        {
+          "sku": "GW-LAB-PAVE",
+          "qty_formula": "area_yd2 / pave_yd2_per_hr"
+        },
+        {
+          "sku": "GW-EQ-ROLL",
+          "qty_formula": "area_yd2 / pave_yd2_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Aggregate base",
+      "takeoff_name": "Aggregate base",
+      "input_unit": "ft2",
+      "variables": {
+        "depth_in": "6",
+        "density_lb_ft3": "110",
+        "waste_pct": "8",
+        "place_yd2_per_hr": "60"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-BASE",
+          "qty_formula": "area_ft2 * (depth_in / 12) * density_lb_ft3 / 2000 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-EQ-SKID",
+          "qty_formula": "area_yd2 / place_yd2_per_hr"
+        },
+        {
+          "sku": "GW-LAB-PAVE",
+          "qty_formula": "area_yd2 / place_yd2_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Concrete walk",
+      "takeoff_name": "Concrete walk",
+      "input_unit": "ft2",
+      "variables": {
+        "depth_in": "4",
+        "waste_pct": "5",
+        "place_yd2_per_hr": "30"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-CONC",
+          "qty_formula": "area_ft2 * (depth_in / 12) / 27 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-LAB-CONC",
+          "qty_formula": "area_yd2 / place_yd2_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Concrete curb",
+      "takeoff_name": "Concrete curb",
+      "input_unit": "ft",
+      "variables": {
+        "width_in": "6",
+        "height_in": "6",
+        "waste_pct": "5",
+        "place_ft_per_hr": "25"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-CONC",
+          "qty_formula": "length_ft * (width_in / 12) * (height_in / 12) / 27 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-LAB-CONC",
+          "qty_formula": "length_ft / place_ft_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Sod area",
+      "takeoff_name": "Sod area",
+      "input_unit": "ft2",
+      "variables": {
+        "waste_pct": "10",
+        "lay_yd2_per_hr": "70"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-SOD",
+          "qty_formula": "area_yd2 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-LAB-LAND",
+          "qty_formula": "area_yd2 / lay_yd2_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Mulch bed",
+      "takeoff_name": "Mulch bed",
+      "input_unit": "ft2",
+      "variables": {
+        "depth_in": "3",
+        "waste_pct": "5",
+        "spread_yd2_per_hr": "40"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-MULCH",
+          "qty_formula": "area_ft2 * (depth_in / 12) / 27 * (1 + waste_pct / 100)"
+        },
+        {
+          "sku": "GW-LAB-LAND",
+          "qty_formula": "area_yd2 / spread_yd2_per_hr"
+        }
+      ]
+    },
+    {
+      "name": "Shrub planting",
+      "takeoff_name": "Shrub planting",
+      "input_unit": "ea",
+      "variables": {
+        "hours_per_each": "0.25"
+      },
+      "components": [
+        {
+          "sku": "GW-MAT-SHRUB",
+          "qty_formula": "count"
+        },
+        {
+          "sku": "GW-LAB-LAND",
+          "qty_formula": "count * hours_per_each"
+        }
+      ]
+    },
+    {
+      "name": "Pavement marking",
+      "takeoff_name": "Pavement marking",
+      "input_unit": "ft",
+      "variables": {
+        "coats": "1"
+      },
+      "components": [
+        {
+          "sku": "GW-SUB-MARK",
+          "qty_formula": "length_ft * coats"
+        }
+      ]
+    },
+    {
+      "name": "Site mobilization",
+      "takeoff_name": "Site mobilization",
+      "input_unit": "ea",
+      "variables": {},
+      "components": [
+        {
+          "sku": "GW-FEE-MOB",
+          "qty_formula": "count"
+        }
+      ]
+    }
+  ]
+}

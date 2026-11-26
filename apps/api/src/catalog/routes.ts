@@ -36,6 +36,7 @@ import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
 import { planCatalogImport, serializeCatalogCsv, type CatalogCsvRow } from "./csv.js";
+import { applyStarterPack } from "./starter.js";
 
 const TENANT = ["tenant-header"] as const;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -1029,6 +1030,34 @@ export async function registerCatalogRoutes(app: ApiApp, ctx: CatalogContext): P
         return serializeCatalogCsv(rows.map(csvRow));
       });
       return reply.type("text/csv; charset=utf-8").send(csv);
+    },
+  );
+
+  app.post(
+    "/catalog-items/starter-pack",
+    {
+      schema: {
+        tags: [...TENANT],
+        description:
+          "Inserts the clean-room starter pack for this workspace. Existing SKUs, takeoff names, and recipe names are left as they are.",
+        body: z.object({}),
+        response: {
+          200: z.object({
+            catalog_created: z.array(z.string()),
+            catalog_skipped: z.array(z.string()),
+            takeoff_created: z.array(z.string()),
+            takeoff_skipped: z.array(z.string()),
+            recipes_created: z.array(z.string()),
+            recipes_skipped: z.array(z.string()),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      return inWorkspace(ctx, request, async ({ trx, workspaceId, member, permissions }) => {
+        requireManage(permissions);
+        return applyStarterPack(trx, workspaceId, member.id);
+      });
     },
   );
 
