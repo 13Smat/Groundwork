@@ -2,13 +2,13 @@
 
 ## Status
 
-Accepted (2026-11-26).
+Accepted (2026-11-26). The Node 22 versus 24 choice left open below is decided in ADR 0004.
 
 ## Context
 
 `docs/specs/README.md` (checked 2026-11-25) records the build stack and leaves hosting open between Render, Fly, and AWS ECS, and between Neon and RDS. Auth and e-sign were also open there; those are ADR 0002 and ADR 0003.
 
-Andy decided the hosts, with no accounts and no spend in this ticket. Local development and CI have to run without those hosts. Node 22 is what the specs write; Node 22 versus 24 is an open question and is not decided here.
+Andy decided the hosts, with no accounts and no spend in this ticket. Local development and CI have to run without those hosts. Node 22 is what the specs write. Node 22 versus 24 was an open question and was not decided here. ADR 0004 decides it.
 
 ## Decision
 
@@ -21,7 +21,7 @@ Andy decided the hosts, with no accounts and no spend in this ticket. Local deve
 
 - AWS ECS and RDS, which the specs left open. Rejected for the plan. Andy named Neon, R2, Fly or Render, and Modal.
 - Signing up for the planned hosts during Ticket 0 so later tickets have credentials. Rejected. The repo is public, and the hosts are planned only.
-- Pinning Node 24 because another repo of Andy's uses it. Rejected. The specs say Node 22, and `docs/specs/OPEN-QUESTIONS.md` leaves 22 versus 24 open.
+- Pinning Node 24 because another repo of Andy's uses it. Rejected for Ticket 0. The specs say Node 22, and `docs/specs/OPEN-QUESTIONS.md` left 22 versus 24 open. ADR 0004 accepts Node 24.
 
 ## Consequences
 

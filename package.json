@@ -1,0 +1,36 @@
+{
+  "name": "groundwork",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10.34.9 <11"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "lint": "eslint . && prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run build --filter=@groundwork/shared && vitest run",
+    "build": "turbo run build",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "format": "prettier --write ."
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.4",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.10.1",
+    "turbo": "^2.11.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^5.1.2"
+  }
+}

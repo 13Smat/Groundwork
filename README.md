@@ -12,11 +12,23 @@ Groundwork is a clean-room field-service platform for paving and landscaping con
 
 Module order, the stack, and the builder rules are in [docs/specs/README.md](docs/specs/README.md).
 
+## Run
+
+Node 24 (see `.nvmrc`) and the pnpm version in `package.json` `packageManager`.
+
+```bash
+pnpm install
+pnpm check
+pnpm dev
+```
+
+`pnpm check` lints, typechecks, tests, and builds. `pnpm dev` starts the office app and the API. Postgres, object storage, and the Python services are not part of this slice.
+
 ## For agents
 
 [AGENTS.md](AGENTS.md) is the standing rules file. Read it before changing the repo. Specs are in [docs/specs/](docs/specs/). Decisions are in [docs/adr/](docs/adr/). Current state is [STATUS.md](STATUS.md).
 
-This repository is rules and specs only until Ticket 1. There is no application code, `package.json`, or CI yet.
+The workspace skeleton and CI are in place. Product modules are not built yet.
 
 ## License
 

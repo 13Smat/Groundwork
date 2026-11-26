@@ -1,0 +1,11 @@
+/*
+  Base tokens. The office app imports this file through Tailwind.
+  Paper and ink are the page. Accent is the one action color.
+*/
+@theme {
+  --color-paper: #f4f0e6;
+  --color-ink: #1c1915;
+  --color-accent: #7a3410;
+  --color-line: #d9d1c3;
+  --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}

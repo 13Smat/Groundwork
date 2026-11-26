@@ -1,6 +1,6 @@
 # Open questions
 
-Known gaps between the specs. This file lists them. It does not answer them. A ticket that needs an answer flags it in the PR and waits for Andy. Do not edit `docs/specs/00` through `12` to paper over a gap.
+Known gaps between the specs. This file lists them. It does not answer them. A ticket that needs an answer flags it in the PR and waits for Andy. Do not edit `docs/specs/00` through `12` to paper over a gap. When an ADR resolves a line, the line stays here and names that ADR.
 
 ## No spec for our own SaaS billing
 
@@ -50,7 +50,9 @@ The entity table in `docs/specs/01-data-model.md` says `CostRecipe` has `output_
 
 ## Node 22 vs 24
 
-`docs/specs/README.md` and `docs/specs/00-architecture.md` say Node 22. They do not discuss Node 24. ADR 0001 does not pick. Ticket 1 needs an explicit choice before it pins a runtime.
+Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nvmrc` is `24`. `engines.node` is `>=24 <25`.
+
+`docs/specs/README.md` and `docs/specs/00-architecture.md` say Node 22. They do not discuss Node 24. ADR 0001 did not pick. Ticket 1 needed an explicit choice before it pinned a runtime. The spec files were not edited.
 
 ## Context basemap, and how the PNG export works for proposals
 
