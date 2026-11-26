@@ -11,6 +11,15 @@
 - `db/seed/starter-pack.json` is a clean-room paving and landscaping pack. `POST /catalog-items/starter-pack` inserts it for the current workspace and skips rows that are already there. Recipes start as drafts. ADR 0011.
 - Playwright covers formula validation, live preview, versioning, the CSV diff, and an office member versus an estimator on unit cost.
 
+### Spec 04 part 1 — Takeoff and measurement model
+
+- Added `0009_takeoff.sql` for `takeoff` and `measurement`. Tenant row security is forced. `groundwork_app` is the only grantee. `takeoff_item` from `0006` is referenced and is not recreated. ADR 0013.
+- `Takeoff.status` lives in `packages/shared`. `draft -> in_review -> final`. `final -> draft` inserts version n+1, copies measurements, and leaves the old row read-only. Any other change is 409.
+- Extended `packages/geo` with Turf geodesic area, length, and rectangle helpers. Display rounding uses the existing integer ratios and `decimal.js`: ft² to 1, yd² to 0.1, ft to 1, acres to 0.001. Stored `value_m2` and `value_m` stay `numeric(14,4)`.
+- Added takeoff and measurement routes. Creating an aerial takeoff is 403 when the source has `allows_tracing = false` or `verified_at` is null, and 409 when the capture is not `ready`. Changing the capture after measurements exist requires `confirm: true`. Bulk PUT upserts by client id, recomputes geography area and length, reports a self-intersection correction, and flags same-item overlaps. The summary returns the sum and the union per takeoff item.
+- CI runs `pnpm test:takeoff` in the `db` job. The PostGIS tests cover the latitude sweep, the 20 ft hole, geodesic length, a 500-feature save, the summary, the imagery 403, and cross-tenant row security.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Ticket 03 — CRM and jobs UI
 
 - Office pipeline board for Lead, Estimating, Proposed, Won, and Lost. Column counts and bid totals come from `GET /pipeline/summary`. A card can be dragged, and Move changes the stage from the keyboard. Lost asks for a reason. A 409 stays on the screen as an alert and the card does not move.

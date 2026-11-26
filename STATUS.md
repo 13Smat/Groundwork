@@ -1,6 +1,6 @@
 # Status
 
-Catalog and cost recipes (spec 06, part 2) is the current slice. CRM and jobs (spec 03, parts 1 and 2) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Catalog and cost recipes (spec 06, part 2) is the current slice. Takeoff and measurements (spec 04, part 1) and CRM and jobs (spec 03) are on main. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
@@ -15,10 +15,11 @@ Catalog and cost recipes (spec 06, part 2) is the current slice. CRM and jobs (s
 - Fixture geocoder and parcel adapters. No network and no API keys. Parcel hits are cached in `parcel_cache`. The first job number in a workspace is `J-1001`.
 - Fastify routes for clients, contacts, locations, resolve, jobs, transitions, notes, tasks, presigned files, search, and the pipeline summary. Creating a client warns on a duplicate email or phone and still creates the row.
 - The office app has the pipeline board, jobs list, address-first job create, job detail, clients, and a location context map. Column totals come from `/pipeline/summary`. Lost asks for a reason. A 409 is shown and the card stays put. File rows include a presigned `download_url`. `GET /jobs/:id/activity` reads `audit_log`. The map uses MapLibre and only the seeded `fixture_rgbir` tile. Playwright covers create, the lost reason, the illegal transition, upload, and search.
+- Takeoff measurements are migration `0009_takeoff.sql`. `takeoff` and `measurement` force row security and reference the `takeoff_item` table from `0006`. ADR 0013. `Takeoff.status` is `draft -> in_review -> final`, and `final -> draft` inserts the next version. PostGIS geography is the stored area and length. Turf in `packages/geo` is the live-feedback helper. A source with `allows_tracing = false` or a null `verified_at` is 403. A capture that is not `ready` is 409.
 - Email and password, magic links, and invites. Google stays off unless both client env vars are set. With no SMTP host, development logs the message. Mailpit is the local catcher.
 - Member transitions live in `packages/shared`. Illegal transitions, an expired invite, and removing the last owner return 409. Disabling a member deletes that user's sessions before the response returns.
 - Tenant routes return 404 when the session is not an active member.
-- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, and CRM tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs the bucket init, and runs Playwright. Scripts that load the API build its workspace dependencies first.
+- CI `check` runs lint, typecheck, unit tests, the Python tile-guard tests, the imagery-ingest unit tests, and build. The `db` job migrates and runs RLS, auth, CRM, and takeoff tests. The `imagery` job installs the ingest venv, renders the fixture tile, and runs the fixture ingest against MinIO and TiTiler. The `e2e` job starts MinIO, runs bucket init on its own, and runs Playwright. Scripts that load the API build its workspace dependencies first.
 
 ## Not in this slice
 
@@ -30,7 +31,9 @@ Catalog and cost recipes (spec 06, part 2) is the current slice. CRM and jobs (s
 - `output_unit`. The column is `input_unit`. The entity table still says `output_unit`. See `docs/specs/OPEN-QUESTIONS.md`.
 - A county boundary table. A county FIPS is accepted, and the raster footprint is not checked against a county polygon.
 - A live NC or NAIP download in CI. The fetcher exists and stays off.
-- Takeoff drawing and proposal PDF attribution.
+- The takeoff map editor, PNG export, undo/redo, and proposal PDF attribution. This slice is the API and the PostGIS tests.
+- `sheet_geom`, `planset_sheet`, and plan-set scale. Spec 12 owns those. A measurement in this slice is geographic.
+- AI assist and AI auto drawing. The `source` values exist. Nothing writes them yet.
 - Custom roles, SSO, SCIM, and per-field permissions beyond cost visibility.
 - A browser-facing signed tile URL. Imagery still proxies.
 - Marking a task done. The API stores `done` and this screen does not change it.

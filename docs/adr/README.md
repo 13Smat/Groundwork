@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0012. CRM is 0009. Catalog starter pack is 0011.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0014. Catalog starter pack is 0011. Takeoff measurements are 0013. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |
@@ -16,3 +16,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0009](0009-crm-jobs.md) | CRM tables, job numbers, and fixture geocoding |
 | [0010](0010-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |
 | [0011](0011-starter-pack.md) | Clean-room catalog starter pack |
+| [0013](0013-takeoff-measurements.md) | Takeoff measurements and geodesic quantities |
