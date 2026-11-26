@@ -13,5 +13,6 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0006](0006-imagery-registry-and-tiles.md) | Imagery registry and the TiTiler gate |
 | [0007](0007-auth-workspaces.md) | Auth tables, sessions, and workspace membership |
 | [0008](0008-imagery-ingest.md) | Imagery ingest worker |
+| [0009](0009-crm-jobs.md) | CRM tables, job numbers, and fixture geocoding |
 | [0010](0010-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |
 | [0011](0011-starter-pack.md) | Clean-room catalog starter pack |

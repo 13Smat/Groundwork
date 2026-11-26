@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -19,6 +20,13 @@ export type PresignedUpload = {
   url: string;
   method: "PUT";
   headers: { "content-type": string };
+  storageKey: string;
+  expiresInSeconds: number;
+};
+
+export type PresignedDownload = {
+  url: string;
+  method: "GET";
   storageKey: string;
   expiresInSeconds: number;
 };
@@ -104,6 +112,28 @@ export async function presignUpload(
     url,
     method: "PUT",
     headers: { "content-type": input.mime },
+    storageKey: input.storageKey,
+    expiresInSeconds,
+  };
+}
+
+/** Same lifetime as the upload URL. The browser loads the gallery from this GET. */
+export async function presignDownload(
+  input: { storageKey: string; expiresInSeconds?: number },
+  config: ObjectStorageConfig = readObjectStorageConfig(),
+): Promise<PresignedDownload> {
+  assertStorageKey(input.storageKey);
+  const expiresInSeconds = input.expiresInSeconds ?? DEFAULT_UPLOAD_EXPIRES_SECONDS;
+  assertExpires(expiresInSeconds);
+  const client = createS3Client(config);
+  const command = new GetObjectCommand({
+    Bucket: config.bucket,
+    Key: input.storageKey,
+  });
+  const url = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+  return {
+    url,
+    method: "GET",
     storageKey: input.storageKey,
     expiresInSeconds,
   };

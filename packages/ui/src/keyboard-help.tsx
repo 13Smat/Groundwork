@@ -15,7 +15,8 @@ export function KeyboardHelp() {
             On the catalog grid, arrow keys move between cells. Escape restores the cell you were
             editing.
           </li>
-          <li>Escape closes this dialog.</li>
+          <li>On a job, Move changes the stage. Lost asks for a reason before it saves.</li>
+          <li>Arrow keys move between a job's tabs. Escape closes this dialog.</li>
         </ul>
         <DialogClose asChild>
           <Button className="mt-4" variant="primary">

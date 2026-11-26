@@ -11,6 +11,24 @@
 - `db/seed/starter-pack.json` is a clean-room paving and landscaping pack. `POST /catalog-items/starter-pack` inserts it for the current workspace and skips rows that are already there. Recipes start as drafts. ADR 0011.
 - Playwright covers formula validation, live preview, versioning, the CSV diff, and an office member versus an estimator on unit cost.
 
+### Ticket 03 — CRM and jobs UI
+
+- Office pipeline board for Lead, Estimating, Proposed, Won, and Lost. Column counts and bid totals come from `GET /pipeline/summary`. A card can be dragged, and Move changes the stage from the keyboard. Lost asks for a reason. A 409 stays on the screen as an alert and the card does not move.
+- Jobs list filters by stage, owner, updated date, and tag. The search box calls `GET /search`.
+- Address-first job create looks up `/locations/resolve`, fills the job name from the street, and creates or picks a client. An ungeocodable address can take a pin or typed coordinates. Duplicate warnings from the create response show on the job.
+- Job detail shows number, stage, client, site, bid value, and owner. Tabs cover overview, files and photos, notes and tasks, and activity. Takeoffs, estimates, and proposals are links. Photos upload through the presigned PUT and render from a presigned GET.
+- Clients list and detail (contacts, locations, jobs). Location detail draws the point and parcel on a MapLibre map. The only raster source is the seeded `fixture_rgbir` capture. The map is context, not a measurement.
+- `GET /jobs/:id/activity` reads `audit_log`. File responses include `download_url`. The e2e job starts MinIO, then runs the bucket init on its own, so the presigned PUT can store the file. `docker compose up --wait` fails that one-shot after it exits 0. MinIO's default API CORS already allows the office origin; `mc cors set` returns 501 against this server. A document request for `/jobs/:id` stays in the office app. Playwright covers create, lost reason, the illegal transition, upload, and search.
+- Recorded the activity and download-URL gap in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
+### Ticket 03 — CRM and jobs API
+
+- Added `0005_crm_jobs.sql` for `client`, `contact`, `location`, `job`, `job_note`, `job_task`, `job_file`, and the global `parcel_cache`. Tenant tables force row security. Grants are to `groundwork_app` only. ADR 0009. Imagery has no `location_id` column. `GET /imagery/captures?locationId=` reads the location point and returns 404 when that point is missing.
+- Job stage changes go through `packages/shared`. Illegal transitions, a missing lost reason, and won without `jobs.force_won` return 409 problem+json. Owner and admin hold that token. Every change writes `audit_log` with the actor and the reason. The first job number in a workspace is `J-1001`.
+- Fixture geocoder and parcel adapters answer without the network or an API key. Parcel hits are cached. Creating a client warns on a duplicate email or phone and still creates the row.
+- Added the CRM and jobs routes, including search and the pipeline summary. Presigned file uploads use the existing MinIO adapter. CI runs `pnpm test:crm` in the `db` job.
+- Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Spec 06 part 1 — Catalog, cost recipes, and the formula engine
 
 - Added `packages/pricing`, a recursive-descent formula parser and evaluator. Operators are `+ - * / ^` and comparisons. Functions are `ceil`, `floor`, `round`, `min`, `max`, and `if`. Built-in takeoff variables come from the input unit. `decimal.js` keeps the math exact. Half-even rounding is only at integer cents and inside `round`. The parser does not call `eval` or `Function`. A complexity cap stops a hostile formula inside 50 ms.

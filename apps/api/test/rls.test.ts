@@ -10,7 +10,19 @@ import type { Database } from "../src/db/types.js";
 import { TenantRoleError, withWorkspaceContext } from "../src/db/workspace.js";
 import { startQueue } from "../src/queue.js";
 
-const TENANT_TABLES = ["counters", "file", "audit_log", "usage_event"] as const;
+const TENANT_TABLES = [
+  "counters",
+  "file",
+  "audit_log",
+  "usage_event",
+  "client",
+  "contact",
+  "location",
+  "job",
+  "job_note",
+  "job_task",
+  "job_file",
+] as const;
 const AUTH_TABLES = [
   "app_user",
   "session",
@@ -212,6 +224,32 @@ describe("row level security", () => {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
     }
+  });
+
+  it("grants crm tables to groundwork_app only and leaves parcel_cache global", async () => {
+    const tables = [
+      "client",
+      "contact",
+      "location",
+      "job",
+      "job_note",
+      "job_task",
+      "job_file",
+      "parcel_cache",
+    ];
+    for (const table of tables) {
+      const result = await requireAdmin().query<{ app: boolean; auth: boolean }>(
+        `select has_table_privilege('groundwork_app', $1, 'select') as app,
+                has_table_privilege('groundwork_auth', $1, 'select') as auth`,
+        [`public.${table}`],
+      );
+      expect(result.rows[0]?.app).toBe(true);
+      expect(result.rows[0]?.auth).toBe(false);
+    }
+    const parcel = await requireAdmin().query<{ relrowsecurity: boolean }>(
+      "select relrowsecurity from pg_class where relname = 'parcel_cache'",
+    );
+    expect(parcel.rows[0]?.relrowsecurity).toBe(false);
   });
 
   it("returns no tenant rows when app.workspace_id is unset or blank", async () => {
@@ -450,6 +488,10 @@ describe("row level security", () => {
       "select to_regclass('public.imagery_capture')::text as name",
     );
     expect(imagery.rows[0]?.name).toBeNull();
+    const clientTable = await check.query<{ name: string | null }>(
+      "select to_regclass('public.client')::text as name",
+    );
+    expect(clientTable.rows[0]?.name).toBeNull();
     await check.end();
 
     const applied = await migrate("up");
@@ -632,6 +674,13 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     file: { a: createId(), b: createId() },
     audit_log: { a: "", b: "" },
     usage_event: { a: "", b: "" },
+    client: { a: createId(), b: createId() },
+    contact: { a: createId(), b: createId() },
+    location: { a: createId(), b: createId() },
+    job: { a: createId(), b: createId() },
+    job_note: { a: createId(), b: createId() },
+    job_task: { a: createId(), b: createId() },
+    job_file: { a: createId(), b: createId() },
   };
   const pool = requireAdmin();
   await pool.query(
@@ -659,6 +708,59 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     a: await insertReturningId(pool, "usage_event", workspaceA),
     b: await insertReturningId(pool, "usage_event", workspaceB),
   };
+  await pool.query(
+    `insert into client (id, workspace_id, type, name)
+     values ($1, $2, 'residential', 'A'), ($3, $4, 'commercial', 'B')`,
+    [ids.client.a, workspaceA, ids.client.b, workspaceB],
+  );
+  await pool.query(
+    `insert into contact (id, workspace_id, client_id, name)
+     values ($1, $2, $3, 'A'), ($4, $5, $6, 'B')`,
+    [ids.contact.a, workspaceA, ids.client.a, ids.contact.b, workspaceB, ids.client.b],
+  );
+  await pool.query(
+    `insert into location (id, workspace_id, client_id, address)
+     values ($1, $2, $3, '{"line1":"1 A St"}'::jsonb), ($4, $5, $6, '{"line1":"1 B St"}'::jsonb)`,
+    [ids.location.a, workspaceA, ids.client.a, ids.location.b, workspaceB, ids.client.b],
+  );
+  await pool.query(
+    `insert into job (id, workspace_id, number, client_id, location_id, name, stage)
+     values ($1, $2, 'J-1', $3, $4, 'A', 'lead'), ($5, $6, 'J-1', $7, $8, 'B', 'lead')`,
+    [
+      ids.job.a,
+      workspaceA,
+      ids.client.a,
+      ids.location.a,
+      ids.job.b,
+      workspaceB,
+      ids.client.b,
+      ids.location.b,
+    ],
+  );
+  await pool.query(
+    `insert into job_note (id, workspace_id, job_id, body)
+     values ($1, $2, $3, 'A'), ($4, $5, $6, 'B')`,
+    [ids.job_note.a, workspaceA, ids.job.a, ids.job_note.b, workspaceB, ids.job.b],
+  );
+  await pool.query(
+    `insert into job_task (id, workspace_id, job_id, title)
+     values ($1, $2, $3, 'A'), ($4, $5, $6, 'B')`,
+    [ids.job_task.a, workspaceA, ids.job.a, ids.job_task.b, workspaceB, ids.job.b],
+  );
+  await pool.query(
+    `insert into job_file (id, workspace_id, job_id, file_id)
+     values ($1, $2, $3, $4), ($5, $6, $7, $8)`,
+    [
+      ids.job_file.a,
+      workspaceA,
+      ids.job.a,
+      ids.file.a,
+      ids.job_file.b,
+      workspaceB,
+      ids.job.b,
+      ids.file.b,
+    ],
+  );
   return ids;
 }
 

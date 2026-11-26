@@ -81,6 +81,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body !== undefined && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
+  if (!headers.has("x-workspace-id")) {
+    const me = queryClient.getQueryData<Me>(["me"]);
+    const workspaceId = me ? activeWorkspace(me)?.workspace_id : undefined;
+    if (workspaceId) {
+      headers.set("x-workspace-id", workspaceId);
+    }
+  }
   const response = await fetch(path, { ...init, headers, credentials: "include" });
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as { detail?: string } | null;

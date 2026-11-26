@@ -624,9 +624,7 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
       return;
     }
     await api(`/workspaces/${workspaceId}/activate`, { method: "POST" });
-    await queryClient.invalidateQueries({ queryKey: ["me"] });
-    await queryClient.invalidateQueries({ queryKey: ["workspace"] });
-    await queryClient.invalidateQueries({ queryKey: ["members"] });
+    await queryClient.invalidateQueries();
   }
 
   return (
@@ -654,6 +652,6 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
 
 export async function signOut(navigate: ReturnType<typeof useNavigate>): Promise<void> {
   await authClient.signOut();
-  queryClient.removeQueries({ queryKey: ["me"] });
+  queryClient.clear();
   await navigate({ to: "/sign-in" });
 }

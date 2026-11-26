@@ -46,6 +46,34 @@ const TENANT_ROUTES = [
   "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
   "post /imagery/ingest",
   "get /imagery/ingest/{jobId}",
+  "get /clients",
+  "post /clients",
+  "get /clients/{id}",
+  "patch /clients/{id}",
+  "delete /clients/{id}",
+  "get /clients/{id}/contacts",
+  "post /clients/{id}/contacts",
+  "patch /contacts/{id}",
+  "delete /contacts/{id}",
+  "get /locations",
+  "post /locations",
+  "get /locations/{id}",
+  "patch /locations/{id}",
+  "post /locations/resolve",
+  "get /jobs",
+  "post /jobs",
+  "get /jobs/{id}",
+  "patch /jobs/{id}",
+  "post /jobs/{id}/transition",
+  "get /jobs/{id}/notes",
+  "post /jobs/{id}/notes",
+  "get /jobs/{id}/tasks",
+  "post /jobs/{id}/tasks",
+  "get /jobs/{id}/files",
+  "post /jobs/{id}/files",
+  "get /jobs/{id}/activity",
+  "get /search",
+  "get /pipeline/summary",
 ];
 
 type Session = { cookie: string; email: string };
@@ -226,6 +254,32 @@ function tenantPayload(
       return { input_qty: "1", input_unit: "ft2" };
     case "post /formula/validate":
       return { formula: "qty", variables: [] };
+    case "post /clients":
+      return { name: "Hidden", type: "residential" };
+    case "patch /clients/{id}":
+      return { name: "Hidden" };
+    case "post /clients/{id}/contacts":
+      return { name: "Hidden" };
+    case "patch /contacts/{id}":
+      return { name: "Hidden" };
+    case "post /locations":
+      return { client_id: createId(), address: { line1: "1 Main St" } };
+    case "patch /locations/{id}":
+      return { notes: "no" };
+    case "post /locations/resolve":
+      return { address: "100 Main St, Morganton, NC 28655" };
+    case "post /jobs":
+      return { name: "Hidden", client: { name: "Hidden", type: "residential" } };
+    case "patch /jobs/{id}":
+      return { name: "Hidden" };
+    case "post /jobs/{id}/transition":
+      return { to: "lost", reason: "price" };
+    case "post /jobs/{id}/notes":
+      return { body: "note" };
+    case "post /jobs/{id}/tasks":
+      return { title: "task" };
+    case "post /jobs/{id}/files":
+      return { mime: "image/png" };
     case "post /imagery/ingest":
       return { sourceId: createId(), year: 2026, countyFips: "37023" };
     case "post /admin/imagery-sources":
@@ -617,7 +671,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|imagery\/|admin\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|admin\/|imagery\/|clients|contacts|locations|jobs|search|pipeline\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
@@ -639,6 +693,9 @@ describe("auth and workspaces", () => {
           .replace("{y}", "0");
         if (path === "/imagery/captures") {
           url += "?bbox=-81.95,35.52,-81.40,35.99";
+        }
+        if (path === "/search") {
+          url += "?q=hidden";
         }
         const payload = tenantPayload(key, ownerProfile.body.memberships[0]?.role_id);
         const response = await requireApp().inject({

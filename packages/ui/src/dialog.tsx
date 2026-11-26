@@ -10,11 +10,14 @@ export function DialogContent({
   description,
   children,
   placement = "center",
+  initialFocusId,
 }: {
   title: string;
   description: string;
   children?: ReactNode;
   placement?: "center" | "end";
+  /** Move focus to this control when the dialog opens. */
+  initialFocusId?: string;
 }) {
   const frame =
     placement === "end"
@@ -23,7 +26,20 @@ export function DialogContent({
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/40" />
-      <DialogPrimitive.Content className={frame}>
+      <DialogPrimitive.Content
+        className={frame}
+        onOpenAutoFocus={(event) => {
+          if (!initialFocusId) {
+            return;
+          }
+          const node = document.getElementById(initialFocusId);
+          if (!(node instanceof HTMLElement)) {
+            return;
+          }
+          event.preventDefault();
+          node.focus();
+        }}
+      >
         <DialogPrimitive.Title className="text-xl font-semibold">{title}</DialogPrimitive.Title>
         <DialogPrimitive.Description className="mt-2 text-base leading-relaxed text-muted">
           {description}

@@ -139,6 +139,7 @@ test("office sees no unit cost and an estimator can edit it", async ({ page }) =
   await expect(page.getByLabel("Unit cost for Crushed stone")).toHaveValue("42.50");
 
   await page.getByRole("link", { name: "Members" }).click();
+  await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
   const officeToken = await invite(page, office, "office");
   const estimatorToken = await invite(page, estimator, "estimator");
 

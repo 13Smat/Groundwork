@@ -28,11 +28,20 @@ import { ImageryRoute } from "./admin/imagery-route";
 import { CatalogRoute } from "./catalog/catalog-route";
 import { RecipeCreateRoute, RecipeEditorRoute, RecipeIndexRoute } from "./catalog/recipe-route";
 import { TakeoffRoute } from "./catalog/takeoff-route";
+import { ClientDetailPage } from "./crm/client-detail-page";
+import { ClientsPage } from "./crm/clients-page";
+import { JobCreatePage } from "./crm/job-create-page";
+import { JobDetailPage } from "./crm/job-detail-page";
+import { JobsPage } from "./crm/jobs-page";
+import { LocationPage } from "./crm/location-page";
+import { PipelinePage } from "./crm/pipeline-page";
 import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
 
 const NAV = [
   { to: "/", label: "Office" },
+  { to: "/pipeline", label: "Pipeline" },
   { to: "/jobs", label: "Jobs" },
+  { to: "/clients", label: "Clients" },
   { to: "/takeoff", label: "Takeoff" },
   { to: "/catalog", label: "Catalog" },
   { to: "/estimates", label: "Estimates" },
@@ -49,7 +58,9 @@ type OfficePath = (typeof NAV)[number]["to"];
 
 const TITLES: Record<OfficePath, string> = {
   "/": "Office",
+  "/pipeline": "Pipeline",
   "/jobs": "Jobs",
+  "/clients": "Clients",
   "/takeoff": "Takeoff",
   "/catalog": "Catalog",
   "/estimates": "Estimates",
@@ -75,10 +86,35 @@ function titleFor(pathname: string): string {
   if (pathname === "/catalog/takeoff") {
     return "Takeoff items";
   }
+  if (pathname === "/jobs/new") {
+    return "New job";
+  }
+  if (pathname.startsWith("/jobs/")) {
+    return "Job";
+  }
+  if (pathname.startsWith("/clients/")) {
+    return "Client";
+  }
+  if (pathname.startsWith("/locations/")) {
+    return "Location";
+  }
   if (pathname in TITLES) {
     return TITLES[pathname as OfficePath];
   }
   return "Office";
+}
+
+function sectionPath(pathname: string): string {
+  if (pathname.startsWith("/jobs")) {
+    return "/jobs";
+  }
+  if (pathname.startsWith("/clients") || pathname.startsWith("/locations")) {
+    return "/clients";
+  }
+  if (pathname.startsWith("/catalog")) {
+    return "/catalog";
+  }
+  return pathname;
 }
 
 function OfficeLink({
@@ -101,7 +137,7 @@ function OfficeNav({ pathname, role }: { pathname: string; role: string | undefi
   return (
     <PrimaryNav
       items={items.map((item) => ({ href: item.to, label: item.label }))}
-      currentPath={pathname}
+      currentPath={sectionPath(pathname)}
       renderLink={OfficeLink}
     />
   );
@@ -195,10 +231,55 @@ const indexRoute = createRoute({
   component: DashboardPage,
 });
 
+const pipelineRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/pipeline",
+  component: PipelinePage,
+});
+
 const jobsRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/jobs",
-  component: placeholder("No job records are loaded in this slice."),
+  component: JobsPage,
+});
+
+const newJobRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/new",
+  component: JobCreatePage,
+});
+
+const jobDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId",
+  component: function JobDetailRoute() {
+    const { jobId } = jobDetailRoute.useParams();
+    return <JobDetailPage jobId={jobId} />;
+  },
+});
+
+const clientsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/clients",
+  component: ClientsPage,
+});
+
+const clientDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/clients/$clientId",
+  component: function ClientDetailRoute() {
+    const { clientId } = clientDetailRoute.useParams();
+    return <ClientDetailPage clientId={clientId} />;
+  },
+});
+
+const locationRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/locations/$locationId",
+  component: function LocationRoute() {
+    const { locationId } = locationRoute.useParams();
+    return <LocationPage locationId={locationId} />;
+  },
 });
 
 const takeoffRoute = createRoute({
@@ -308,7 +389,13 @@ const routeTree = rootRoute.addChildren([
   signUpRoute,
   authedRoute.addChildren([
     indexRoute,
+    pipelineRoute,
     jobsRoute,
+    newJobRoute,
+    jobDetailRoute,
+    clientsRoute,
+    clientDetailRoute,
+    locationRoute,
     takeoffRoute,
     catalogRoute,
     takeoffItemsRoute,
