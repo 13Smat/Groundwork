@@ -116,21 +116,29 @@ function width(feature: GeoJSONStoreFeatures, value: number): number {
   return fields(feature).highlighted === true ? value + 3 : value;
 }
 
-function imageryStyle(captureId: string): StyleSpecification {
+/** No glyphs, no sprite, and no tile URL. `load` must not wait on the network. */
+function paperStyle(): StyleSpecification {
   return {
     version: 8,
-    sources: {
-      imagery: {
-        type: "raster",
-        tiles: [tileTemplate(captureId)],
-        tileSize: 256,
-      },
-    },
-    layers: [
-      { id: "paper", type: "background", paint: { "background-color": "#d9d1c3" } },
-      { id: "imagery", type: "raster", source: "imagery" },
-    ],
+    sources: {},
+    layers: [{ id: "paper", type: "background", paint: { "background-color": "#d9d1c3" } }],
   };
+}
+
+function addImagery(map: MapLibreMap, captureId: string) {
+  if (map.getSource("imagery")) {
+    return;
+  }
+  map.addSource("imagery", {
+    type: "raster",
+    tiles: [tileTemplate(captureId)],
+    tileSize: 256,
+  });
+  map.addLayer({ id: "imagery", type: "raster", source: "imagery" });
+}
+
+function tileFailure(message: string): boolean {
+  return message.includes("/imagery/tiles/");
 }
 
 /**
@@ -262,6 +270,14 @@ export function TakeoffMap({
     const currentPoint = pointKey === "" ? null : parsePoint(pointKey);
     const currentParcel = parcelKey === "" ? null : (JSON.parse(parcelKey) as ReferenceParcel);
 
+    let settled = false;
+    let failed = false;
+    const timer = window.setTimeout(() => {
+      if (!cancelled && !settled && !failed) {
+        setStatus("The map could not start.");
+      }
+    }, 8_000);
+
     void (async () => {
       try {
         const worker = await import("maplibre-gl/dist/maplibre-gl-worker.mjs?url");
@@ -281,7 +297,8 @@ export function TakeoffMap({
           pitchWithRotate: false,
           attributionControl: false,
           maplibreLogo: false,
-          style: imageryStyle(captureRef.current),
+          localIdeographFontFamily: "sans-serif",
+          style: paperStyle(),
           transformRequest: (url) => {
             const currentWorkspace = workspaceRef.current;
             if (!currentWorkspace || !url.includes("/imagery/tiles/")) {
@@ -296,15 +313,22 @@ export function TakeoffMap({
         });
         mapRef.current = map;
         map.on("error", (event) => {
-          const detail = event.error instanceof Error ? event.error.message : "";
-          if (/webgl/i.test(detail) && !cancelled) {
-            setStatus("The map could not start.");
+          const detail = event.error instanceof Error ? event.error.message : "unknown map error";
+          console.error("takeoff map error", detail);
+          if (tileFailure(detail) || cancelled || settled) {
+            return;
           }
+          failed = true;
+          window.clearTimeout(timer);
+          setStatus(`The map could not start. ${detail}`);
         });
         map.on("load", () => {
           if (cancelled || !map) {
             return;
           }
+          settled = true;
+          window.clearTimeout(timer);
+          addImagery(map, captureRef.current);
           addReference(map, currentPoint, currentParcel);
           const color = () => colorRef.current;
           draw = new TerraDraw({
@@ -585,6 +609,7 @@ export function TakeoffMap({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
       try {
         draw?.stop();
       } catch {

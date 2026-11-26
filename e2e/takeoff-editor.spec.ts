@@ -50,11 +50,39 @@ async function createJob(
   await expect(page.getByRole("heading", { name: "J-1001" })).toBeVisible();
 }
 
-async function expectMapReady(page: Page): Promise<void> {
-  const ready = page.getByText("Map ready");
-  const failed = page.getByText("The map could not start.");
-  await expect(ready.or(failed)).toBeVisible({ timeout: 30_000 });
-  await expect(failed).toHaveCount(0);
+function watchPage(page: Page): string[] {
+  const logs: string[] = [];
+  page.on("console", (message) => {
+    logs.push(`console ${message.type()}: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => {
+    logs.push(`pageerror: ${error.message}`);
+  });
+  return logs;
+}
+
+async function chooseCapture(page: Page, label: string): Promise<void> {
+  const select = page.getByLabel("Imagery capture");
+  const value = await select.locator("option", { hasText: label }).getAttribute("value");
+  if (!value) {
+    throw new Error(`No imagery option includes ${label}.`);
+  }
+  await select.selectOption(value);
+}
+
+async function expectMapReady(page: Page, logs: readonly string[]): Promise<void> {
+  const ready = page.getByText("Map ready", { exact: true });
+  const failed = page.getByText("The map could not start");
+  try {
+    await expect(ready.or(failed)).toBeVisible({ timeout: 30_000 });
+    await expect(failed).toHaveCount(0);
+  } catch (error) {
+    const body = await page.locator("body").innerText();
+    const reason = error instanceof Error ? error.message : "The map was not ready.";
+    throw new Error(`${reason}\n--- console ---\n${logs.join("\n")}\n--- page ---\n${body}`, {
+      cause: error,
+    });
+  }
 }
 
 async function clickMap(page: Page, x: number, y: number): Promise<void> {
@@ -69,6 +97,7 @@ async function clickMap(page: Page, x: number, y: number): Promise<void> {
 
 test("draw a polygon, line, and point, then switch imagery", async ({ page }) => {
   test.setTimeout(120_000);
+  const logs = watchPage(page);
   await signUp(page, "Takeoff Owner");
   await loadStarter(page);
   await createJob(page, "100 Main St, Morganton, NC 28655", "Morganton Homes");
@@ -78,7 +107,7 @@ test("draw a polygon, line, and point, then switch imagery", async ({ page }) =>
   await expect(page.getByText("No takeoffs yet.")).toBeVisible();
   await page.getByRole("button", { name: "New takeoff" }).click();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expectMapReady(page);
+  await expectMapReady(page, logs);
 
   const options = page.getByLabel("Imagery capture").locator("option");
   await expect(options.first()).toContainText("Helene 2025");
@@ -130,16 +159,16 @@ test("draw a polygon, line, and point, then switch imagery", async ({ page }) =>
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expectMapReady(page);
+  await expectMapReady(page, logs);
   await expect(page.getByText("Server total 1", { exact: true })).toBeVisible();
 
-  await page.getByLabel("Imagery capture").selectOption({ label: /NC Ortho · 2024-03-15/ });
+  await chooseCapture(page, "NC Ortho · 2024-03-15");
   await expect(page.getByRole("heading", { name: "Switch imagery?" })).toBeVisible();
   await page.getByRole("button", { name: "Keep this capture" }).click();
   await expect(page.getByLabel("Imagery capture").locator("option:checked")).toContainText(
     "2025-04-15",
   );
-  await page.getByLabel("Imagery capture").selectOption({ label: /NC Ortho · 2024-03-15/ });
+  await chooseCapture(page, "NC Ortho · 2024-03-15");
   await page.getByRole("button", { name: "Switch capture" }).click();
   await expect(page.getByLabel("Imagery capture").locator("option:checked")).toContainText(
     "2024-03-15",
@@ -167,6 +196,7 @@ test("measuring stays blocked when no allowed capture covers the site", async ({
 
 test("a site outside North Carolina shows the NAIP banner", async ({ page }) => {
   test.setTimeout(120_000);
+  const logs = watchPage(page);
   await signUp(page, "Naip Owner");
   await createJob(page, "1 Prairie Road, Kansas", "Prairie Homes", { lat: "39", lng: "-98" });
   await page.getByRole("tab", { name: "Takeoffs" }).click();
@@ -174,7 +204,7 @@ test("a site outside North Carolina shows the NAIP banner", async ({ page }) => 
   await expect(page.getByText("USDA NAIP")).toBeVisible();
   await page.getByRole("button", { name: "New takeoff" }).click();
   await expect(page.getByRole("heading", { name: "Takeoff editor" })).toBeVisible();
-  await expectMapReady(page);
+  await expectMapReady(page, logs);
   const labels = await page.getByLabel("Imagery capture").locator("option").allTextContents();
   expect(labels.join("\n")).toMatch(/NAIP/);
   expect(labels.join("\n")).not.toMatch(/Helene|NC Ortho/);
