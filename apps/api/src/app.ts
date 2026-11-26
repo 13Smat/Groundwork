@@ -10,9 +10,13 @@ import type { Logger } from "pino";
 import { z } from "zod/v4";
 
 import { registerProblemHandlers } from "./errors.js";
+import { registerImageryRoutes, type ImageryRouteOptions } from "./imagery/routes.js";
 import { createLogger } from "./logging.js";
 
-export async function buildApp(options?: { logger?: boolean | Logger }) {
+export async function buildApp(options?: {
+  logger?: boolean | Logger;
+  imagery?: ImageryRouteOptions;
+}) {
   const logger =
     options?.logger === true ? createLogger("api") : options?.logger ? options.logger : false;
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
@@ -46,6 +50,10 @@ export async function buildApp(options?: { logger?: boolean | Logger }) {
   );
 
   app.get("/openapi.json", async () => app.swagger());
+
+  if (options?.imagery) {
+    await registerImageryRoutes(app, options.imagery);
+  }
 
   return app;
 }

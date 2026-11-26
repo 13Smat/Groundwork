@@ -1,26 +1,25 @@
 # Status
 
-Foundations 2 (local infra, database, row level security, and the office shell) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
+Imagery registry and TiTiler (spec 04, part 1) is the current slice. Owner: Andy Silver. The agent opens a draft PR and does not merge.
 
 ## Done
 
-- Ticket 0: `AGENTS.md`, ADR 0001 through ADR 0003, the build specs, and the open-question list.
-- Ticket 1: Node 24 LTS, pnpm workspaces, Turborepo, the Fastify API with problem+json, the Vite office shell, and `pnpm check` in GitHub Actions. ADR 0004.
-- Ticket 2: `docker-compose.yml` runs Postgres/PostGIS `16-3.4`, MinIO built from the GitHub release (Docker Hub no longer serves the image), a bucket init, Mailpit, and upstream TiTiler as a placeholder. ADR 0005.
-- SQL migrations in `db/migrations`. `pnpm db:migrate` is idempotent. `pnpm db:migrate:down` reverts the latest file. The first migration enables `postgis`, `pgcrypto`, and `citext`, and creates `counters`, `file`, `event_log`, `audit_log`, and `usage_event`.
-- Tenant tables force row level security with `workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid`. The API uses `groundwork_app`, which is not a superuser and does not bypass row security. `withWorkspaceContext` sets the workspace for one transaction.
-- `pg-boss` worker entrypoint (`pnpm worker`) on the database-owner connection. S3/MinIO presigned PUT adapter. pino redacts authorization headers. OpenTelemetry exports only when an OTLP endpoint is set.
-- `@groundwork/ui` has the button, text field, dialog, and primary nav. The office app has a keyboard-accessible shell for the spec 00 sections.
-- CI keeps the `check` job and adds a `db` job that migrates against PostGIS and runs the RLS tests.
+- Ticket 0 through Ticket 2 are on main (`dabcba3`): agent rules, the monorepo, CI, Postgres/PostGIS, MinIO, the `groundwork_app` role, `withWorkspaceContext`, and the office shell. ADR 0001 through ADR 0005.
+- Migration `0003_imagery.sql` adds `imagery_source` and `imagery_capture` with GiST coverage indexes. Global rows (`workspace_id` null) are readable by every workspace. `groundwork_app` cannot write those rows. ADR 0006. Migration `0002` is left for Auth and Workspaces.
+- Seeded `nc_helene_2025`, `nc_ortho` (2024 and 2022), and `naip`, plus blocked `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` (`allows_tracing` false, `verified_at` null). A synthetic 4-band fixture COG is in `db/seed/fixtures/` and is uploaded to MinIO by the tests. No live NC OneMap pull.
+- `services/tiles` is a TiTiler FastAPI app. It serves XYZ tiles from the bucket and returns 403 unless the source allows tracing and `verified_at` is set. Compose builds it in place of the unguarded placeholder.
+- `GET /imagery/captures` (bbox, or locationId which returns 501) and `GET /imagery/tiles/:captureId/{z}/{x}/{y}` (signed proxy, usage event, 403 guard). Both sit behind `stubImageryAuth` (`x-workspace-id`). Auth will replace that function. There is no session middleware yet.
+- CI `check` still runs lint, typecheck, unit tests, the Python guard tests, and build. The `db` job migrates and runs RLS tests, including the imagery policy. The `imagery` job builds TiTiler and renders the fixture tile.
 
 ## Not in this slice
 
-- Auth, the Better Auth table mapping, and the `workspace` table. Infra rows store `workspace_id` with no foreign key.
-- Product modules, imagery ingest, the fixture COG, and the TiTiler `allows_tracing` / `verified_at` gate.
-- A mailer. Mailpit is only the local SMTP catcher.
+- Auth, the Better Auth table mapping, and the `workspace` table. The imagery routes trust the stub header until that lands.
+- `locationId` resolution. The location table is spec 03.
+- County ingest, the ingest API, takeoff drawing, and proposal PDF attribution.
+- A browser-facing signed tile URL. This slice proxies.
 - Sentry. Choosing a license. Choosing between Fly and Render.
 - The remaining gaps in `docs/specs/OPEN-QUESTIONS.md`.
-- Sign-ups or spend. No hosted secrets in git. Local compose passwords are laptop defaults and are refused when `NODE_ENV=production`.
+- Sign-ups or spend. No hosted secrets in git. Local compose passwords and the tile signing secret are laptop defaults and are refused when `NODE_ENV=production`.
 
 ## Open questions
 

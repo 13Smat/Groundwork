@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { hostIsForbidden } from "./imagery/hosts.js";
+
 /**
  * Laptop defaults. They match docker-compose.yml and are not hosted credentials.
  * NODE_ENV=production refuses them. ADR 0005.
@@ -15,6 +17,8 @@ export const LOCAL_S3_REGION = "us-east-1";
 export const LOCAL_S3_BUCKET = "groundwork";
 export const LOCAL_S3_ACCESS_KEY_ID = "minioadmin";
 export const LOCAL_S3_SECRET_ACCESS_KEY = "minioadmin";
+export const LOCAL_TITILER_URL = "http://127.0.0.1:8080";
+export const LOCAL_TILE_SIGNING_SECRET = "local-tile-signing-secret";
 
 export const APP_ROLE = "groundwork_app";
 
@@ -85,6 +89,39 @@ export type ObjectStorageConfig = {
   accessKeyId: string;
   secretAccessKey: string;
 };
+
+export function readTitilerUrl(): URL {
+  const raw = readOrLocal("TITILER_URL", LOCAL_TITILER_URL);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`TITILER_URL is not a URL. Received ${raw}.`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("TITILER_URL must be http or https.");
+  }
+  if (!url.hostname || hostIsForbidden(url.hostname)) {
+    throw new Error(`TITILER_URL host is not allowed for tile serving. Received ${url.hostname}.`);
+  }
+  return url;
+}
+
+export function readTileSigningSecret(): string {
+  const value = readOptional("TILE_SIGNING_SECRET");
+  if (process.env.NODE_ENV === "production") {
+    if (!value || value === LOCAL_TILE_SIGNING_SECRET) {
+      throw new Error(
+        "TILE_SIGNING_SECRET must be set to a non-default value when NODE_ENV is production.",
+      );
+    }
+  }
+  const secret = value ?? LOCAL_TILE_SIGNING_SECRET;
+  if (secret.length < 16) {
+    throw new Error("TILE_SIGNING_SECRET must be at least 16 characters.");
+  }
+  return secret;
+}
 
 export function readObjectStorageConfig(): ObjectStorageConfig {
   return {

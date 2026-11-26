@@ -81,3 +81,51 @@ jobs:
 
       - name: Row level security
         run: pnpm test:rls
+
+  imagery:
+    name: imagery
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Tile guard
+        run: pnpm test:tiles
+
+      - name: Start Postgres, MinIO, and TiTiler
+        run: docker compose up -d --build --wait postgres minio minio-init titiler
+
+      - name: Migrate
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
+          APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
+          APP_DB_PASSWORD: groundwork
+
+      - name: Imagery and TiTiler
+        run: pnpm test:imagery
+        env:
+          DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
+          APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
+          APP_DB_PASSWORD: groundwork
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_REGION: us-east-1
+          S3_BUCKET: groundwork
+          S3_ACCESS_KEY_ID: minioadmin
+          S3_SECRET_ACCESS_KEY: minioadmin
+          TITILER_URL: http://127.0.0.1:8080
+          TILE_SIGNING_SECRET: local-tile-signing-secret

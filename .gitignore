@@ -10,6 +10,10 @@ node_modules/
 *.pem
 *.key
 
+# Python
+__pycache__/
+*.pyc
+
 # Build output
 dist/
 build/

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Imagery registry and TiTiler
+
+- Added `0003_imagery.sql` for `imagery_source` and `imagery_capture`. Global rows are readable under the null-workspace policy. The app role cannot write them. ADR 0006.
+- Seeded the NC Helene 2025, NC ortho, and NAIP rows, plus blocked Google, Mapbox, and Orthoimagery_Latest rows. Committed a synthetic 4-band fixture COG. Tests load it into MinIO. No state service is called.
+- Added the TiTiler app in `services/tiles` and wired it into `docker-compose.yml` in place of the unguarded placeholder. XYZ tiles come from the bucket. `allows_tracing = false` or a null `verified_at` returns 403 from the API and from TiTiler.
+- Added `GET /imagery/captures` and `GET /imagery/tiles/:captureId/{z}/{x}/{y}`. The tile route proxies a 60-second signed URL and writes an `imagery_tile` usage event. Both routes use `stubImageryAuth` until Auth and Workspaces replaces it.
+- CI runs the Python guard tests in `check` and an imagery job that renders the fixture tile. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
+
 ### Ticket 2 — Local infra, database, and office shell
 
 - Added `docker-compose.yml` for PostGIS `16-3.4`, MinIO (built from the GitHub release because Docker Hub no longer serves the image), bucket init, Mailpit `v1.34.0`, and upstream TiTiler `2.0.5` as a placeholder with no fixture COG and no `allows_tracing` gate. ADR 0005.
