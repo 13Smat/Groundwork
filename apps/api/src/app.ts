@@ -16,6 +16,8 @@ import { registerAuthHandler } from "./auth/http.js";
 import { createMailer, type Mailer } from "./auth/mail.js";
 import { createDb } from "./db/client.js";
 import { registerProblemHandlers } from "./errors.js";
+import { registerCrmRoutes } from "./crm/routes.js";
+import { createLocationBBoxLookup } from "./crm/location-lookup.js";
 import { registerImageryRoutes, type ImageryRouteOptions } from "./imagery/routes.js";
 import { createLogger } from "./logging.js";
 import { registerGroundworkRoutes } from "./routes/groundwork.js";
@@ -73,6 +75,11 @@ export async function buildApp(options?: {
       auth,
       mailer,
     });
+    await registerCrmRoutes(app, {
+      db,
+      authPool: options.database.auth,
+      auth,
+    });
     await registerImageryRoutes(app, {
       ...options.imagery,
       db,
@@ -81,6 +88,7 @@ export async function buildApp(options?: {
         auth,
         authPool: options.database.auth,
       }),
+      locationLookup: options.imagery?.locationLookup ?? createLocationBBoxLookup(db),
     });
   }
 

@@ -152,4 +152,97 @@ export interface Database {
     updated_at: Generated<Date>;
     created_by: string | null;
   };
+  parcel_cache: {
+    id: string;
+    provider: string;
+    provider_parcel_id: string;
+    geom: unknown;
+    attrs: ColumnType<unknown, unknown, unknown>;
+    fetched_at: Generated<Date>;
+  };
+  client: {
+    id: string;
+    workspace_id: string;
+    type: string;
+    name: string;
+    billing_address: unknown | null;
+    email: string | null;
+    phone: string | null;
+    tags: string[];
+    archived_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  contact: {
+    id: string;
+    workspace_id: string;
+    client_id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    role: string | null;
+    is_primary: boolean;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  location: {
+    id: string;
+    workspace_id: string;
+    client_id: string | null;
+    address: unknown;
+    point: unknown;
+    parcel_cache_id: string | null;
+    site_geom: unknown;
+    notes: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  job: {
+    id: string;
+    workspace_id: string;
+    number: string;
+    client_id: string | null;
+    location_id: string | null;
+    name: string;
+    stage: string;
+    bid_value_cents: ColumnType<string | null, string | number | null, string | number | null>;
+    owner_member_id: string | null;
+    source: string | null;
+    lost_reason: string | null;
+    tags: string[];
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  job_note: {
+    id: string;
+    workspace_id: string;
+    job_id: string;
+    body: string;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  job_task: {
+    id: string;
+    workspace_id: string;
+    job_id: string;
+    title: string;
+    done: boolean;
+    due_at: Date | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  job_file: {
+    id: string;
+    workspace_id: string;
+    job_id: string;
+    file_id: string;
+    created_at: Generated<Date>;
+    created_by: string | null;
+  };
 }
