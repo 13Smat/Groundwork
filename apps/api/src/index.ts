@@ -6,6 +6,7 @@ import {
   loadLocalEnv,
   readAppDatabaseUrl,
   readAuthDatabaseUrl,
+  readDatabaseUrl,
   readHost,
   readObjectStorageConfig,
   readPort,
@@ -21,7 +22,9 @@ const logger = createLogger("api");
 
 const { buildApp } = await import("./app.js");
 const { createDb, createPool } = await import("./db/client.js");
+const { ensureImageryIngestQueue, imageryIngestDispatch } = await import("./imagery/queue.js");
 const { checkTitiler } = await import("./imagery/proxy.js");
+const { startQueue } = await import("./queue.js");
 const { checkObjectStorage } = await import("./storage/s3.js");
 
 const databaseUrl = readAppDatabaseUrl();
@@ -74,10 +77,17 @@ try {
   process.exit(1);
 }
 
+const ownerUrl = readDatabaseUrl();
+const boss = await startQueue(ownerUrl, (error) => {
+  logger.error({ err: error }, "pg-boss error");
+});
+await ensureImageryIngestQueue(boss);
+logger.info({ database: redactDatabaseUrl(ownerUrl) }, "ingest queue ready");
+
 const app = await buildApp({
   logger,
   database: { app: pool, auth: authPool },
-  imagery: { db: createDb(pool) },
+  imagery: { db: createDb(pool), ingestDispatch: imageryIngestDispatch(boss) },
 });
 const port = readPort(process.env.PORT);
 const host = readHost(process.env.HOST);
@@ -91,6 +101,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   logger.info({ signal }, "shutting down");
   await app.close();
+  await boss.stop({ graceful: true, close: true, timeout: 10_000 });
   await authPool.end();
   await pool.end();
   await telemetry.shutdown();

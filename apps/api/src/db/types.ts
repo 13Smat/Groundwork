@@ -206,4 +206,20 @@ export interface Database {
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
   };
+  imagery_ingest_job: {
+    id: string;
+    workspace_id: string;
+    source_id: string;
+    capture_id: string;
+    county_fips: string | null;
+    aoi: unknown;
+    year: number;
+    idempotency_key: string;
+    request_hash: string;
+    status: string;
+    error: string | null;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
 }

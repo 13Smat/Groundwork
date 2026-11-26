@@ -23,6 +23,12 @@ export {
 } from "./permissions.js";
 export { PROBLEM_JSON_CONTENT_TYPE, problem, problemSchema, type Problem } from "./problem.js";
 export {
+  ImageryCaptureTransitionError,
+  assertImageryCaptureTransition,
+  imageryCaptureStatusSchema,
+  type ImageryCaptureStatus,
+} from "./state/imagery-capture.js";
+export {
   assertInviteCurrent,
   assertKeepsAnOwner,
   IllegalMemberTransitionError,

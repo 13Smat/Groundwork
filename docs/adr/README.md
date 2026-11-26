@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0009.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0011. CRM is 0009.
 
 | ADR | Title |
 | --- | --- |
@@ -12,4 +12,5 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0005](0005-local-infra-and-rls.md) | Local infra, the app role, and infra table shapes |
 | [0006](0006-imagery-registry-and-tiles.md) | Imagery registry and the TiTiler gate |
 | [0007](0007-auth-workspaces.md) | Auth tables, sessions, and workspace membership |
-| [0008](0008-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |
+| [0008](0008-imagery-ingest.md) | Imagery ingest worker |
+| [0010](0010-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |

@@ -17,7 +17,7 @@
 -- draft -> active -> archived, and editing an active recipe creates version
 -- n+1. family_id groups those versions. input_unit follows the SQL sketch.
 -- unit_price_cents is the sell price spec 02 shows to roles without
--- catalog.manage. ADR 0008.
+-- catalog.manage. ADR 0010.
 
 create table takeoff_item (
   id uuid primary key,

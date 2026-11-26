@@ -89,3 +89,19 @@ export function withWorkspaceContext<T>(
 ): Promise<T> {
   return withDbContext(db, { workspaceId }, fn);
 }
+
+/**
+ * Same tenant connection as `withWorkspaceContext`, plus `app.imagery_admin=on`
+ * for this transaction only. Call it only after `requireImageryAdmin`. The
+ * setting is what lets the app role write a global imagery row. ADR 0008.
+ */
+export function withImageryAdminContext<T>(
+  db: Kysely<Database>,
+  workspaceId: string,
+  fn: (trx: Transaction<Database>) => Promise<T>,
+): Promise<T> {
+  return withDbContext(db, { workspaceId }, async (trx) => {
+    await sql`select set_config('app.imagery_admin', 'on', true)`.execute(trx);
+    return fn(trx);
+  });
+}

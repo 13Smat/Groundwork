@@ -6,7 +6,7 @@ import type pg from "pg";
 import type { Database } from "../db/types.js";
 import { ProblemError } from "../errors.js";
 import type { Auth } from "./auth.js";
-import { requireActiveMember, requireSession } from "./guard.js";
+import { requireActiveMember, requireImageryAdmin, requireSession } from "./guard.js";
 
 export const WORKSPACE_HEADER = "x-workspace-id";
 
@@ -44,6 +44,25 @@ export function createSessionImageryAuth(ctx: {
     const session = await requireSession(ctx.auth, request.headers);
     const workspaceId = workspaceIdFromHeader(request);
     await requireActiveMember(ctx, session.id, workspaceId);
+    return { workspaceId };
+  };
+}
+
+/**
+ * Same session and membership check as `createSessionImageryAuth`, then the
+ * member's role. Owner and admin may edit imagery sources and start ingest.
+ * Any other active role is 403.
+ */
+export function createAdminImageryAuth(ctx: {
+  db: Kysely<Database>;
+  auth: Auth;
+  authPool: pg.Pool;
+}): ImageryAuthHook {
+  return async (request) => {
+    const session = await requireSession(ctx.auth, request.headers);
+    const workspaceId = workspaceIdFromHeader(request);
+    const member = await requireActiveMember(ctx, session.id, workspaceId);
+    requireImageryAdmin(member);
     return { workspaceId };
   };
 }

@@ -1,6 +1,7 @@
 import {
   CreateBucketCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -122,6 +123,20 @@ export async function putObject(
       ContentType: input.mime,
     }),
   );
+}
+
+export async function objectExists(
+  storageKey: string,
+  config: ObjectStorageConfig = readObjectStorageConfig(),
+): Promise<boolean> {
+  assertStorageKey(storageKey);
+  const client = createS3Client(config);
+  try {
+    await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: storageKey }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Create the bucket when a local test is talking to a fresh MinIO. */

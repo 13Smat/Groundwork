@@ -21,6 +21,7 @@ export default defineConfig({
       "/roles": proxy,
       "/catalog-items": proxy,
       "/imagery": proxy,
+      "/admin": proxy,
       "/openapi.json": proxy,
       "/healthz": proxy,
     },

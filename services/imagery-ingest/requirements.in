@@ -1,0 +1,5 @@
+# Direct pins checked against PyPI on 2026-11-26. The lockfile with hashes is
+# requirements.txt. CI installs that file with --require-hashes.
+rasterio==1.5.2
+rio-cogeo==7.0.4
+boto3==1.44.12

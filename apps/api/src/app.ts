@@ -11,7 +11,7 @@ import type pg from "pg";
 import { z } from "zod/v4";
 
 import { createAuth } from "./auth/auth.js";
-import { createSessionImageryAuth } from "./auth/hook.js";
+import { createAdminImageryAuth, createSessionImageryAuth } from "./auth/hook.js";
 import { registerAuthHandler } from "./auth/http.js";
 import { createMailer, type Mailer } from "./auth/mail.js";
 import { createDb } from "./db/client.js";
@@ -25,7 +25,9 @@ export async function buildApp(options?: {
   logger?: boolean | Logger;
   database?: { app: pg.Pool; auth: pg.Pool };
   mailer?: Mailer;
-  imagery?: Omit<ImageryRouteOptions, "db" | "auth"> & { db?: ImageryRouteOptions["db"] };
+  imagery?: Omit<ImageryRouteOptions, "db" | "auth" | "adminAuth"> & {
+    db?: ImageryRouteOptions["db"];
+  };
 }) {
   const logger =
     options?.logger === true ? createLogger("api") : options?.logger ? options.logger : undefined;
@@ -67,6 +69,7 @@ export async function buildApp(options?: {
     const db = options.imagery?.db ?? createDb(options.database.app);
     const mailer = options.mailer ?? createMailer(app.log);
     const auth = createAuth(options.database.auth, mailer);
+    const session = { db, auth, authPool: options.database.auth };
     registerAuthHandler(app, auth);
     await registerGroundworkRoutes(app, {
       db,
@@ -82,11 +85,8 @@ export async function buildApp(options?: {
     await registerImageryRoutes(app, {
       ...options.imagery,
       db,
-      auth: createSessionImageryAuth({
-        db,
-        auth,
-        authPool: options.database.auth,
-      }),
+      auth: createSessionImageryAuth(session),
+      adminAuth: createAdminImageryAuth(session),
     });
   }
 

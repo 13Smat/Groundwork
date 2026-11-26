@@ -1,4 +1,4 @@
-# ADR 0008: Catalog, cost recipes, and the formula engine
+# ADR 0010: Catalog, cost recipes, and the formula engine
 
 ## Status
 

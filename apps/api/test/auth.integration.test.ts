@@ -38,8 +38,13 @@ const TENANT_ROUTES = [
   "post /cost-recipes/{id}/versions",
   "post /cost-recipes/{id}/preview",
   "post /formula/validate",
+  "get /admin/imagery-sources",
+  "post /admin/imagery-sources",
+  "patch /admin/imagery-sources/{sourceId}",
   "get /imagery/captures",
   "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
+  "post /imagery/ingest",
+  "get /imagery/ingest/{jobId}",
 ];
 
 type Session = { cookie: string; email: string };
@@ -218,6 +223,18 @@ function tenantPayload(
       return { input_qty: "1", input_unit: "ft2" };
     case "post /formula/validate":
       return { formula: "qty", variables: [] };
+    case "post /imagery/ingest":
+      return { sourceId: createId(), year: 2026, countyFips: "37023" };
+    case "post /admin/imagery-sources":
+      return {
+        provider: "other",
+        name: "Nope",
+        bands: "RGB",
+        allowsTracing: false,
+        allowsMlTraining: false,
+      };
+    case "patch /admin/imagery-sources/{sourceId}":
+      return { notes: "Nope" };
     default:
       return undefined;
   }
@@ -597,7 +614,7 @@ describe("auth and workspaces", () => {
         const tags = operation.tags ?? [];
         const key = `${method} ${path}`;
         const tenantPath =
-          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|imagery\/)/.test(
+          /^\/(workspaces\/|members\/|catalog-items|takeoff-items|cost-recipes|formula\/|imagery\/|admin\/)/.test(
             path,
           );
         if (tenantPath && !tags.some((tag) => tag.startsWith("tenant-"))) {
@@ -612,6 +629,8 @@ describe("auth and workspaces", () => {
           .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`)
           .replaceAll("{id}", createId())
           .replace("{captureId}", createId())
+          .replace("{jobId}", createId())
+          .replace("{sourceId}", createId())
           .replace("{z}", "1")
           .replace("{x}", "0")
           .replace("{y}", "0");

@@ -6,10 +6,18 @@
 
 - Added `packages/pricing`, a recursive-descent formula parser and evaluator. Operators are `+ - * / ^` and comparisons. Functions are `ceil`, `floor`, `round`, `min`, `max`, and `if`. Built-in takeoff variables come from the input unit. `decimal.js` keeps the math exact. Half-even rounding is only at integer cents and inside `round`. The parser does not call `eval` or `Function`. A complexity cap stops a hostile formula inside 50 ms.
 - Added the measure-unit table to `packages/geo`. Factors are exact integer ratios. One international foot is 0.3048 m. A square yard is nine square feet. An acre is 43,560 square feet.
-- Added migration `0006_catalog_recipes.sql` for `takeoff_item`, `catalog_item`, `cost_recipe`, and `recipe_component`. Tenant row security is forced. `groundwork_app` is the only grantee. There is no foreign key to `job` or `location`. ADR 0008.
+- Added migration `0006_catalog_recipes.sql` for `takeoff_item`, `catalog_item`, `cost_recipe`, and `recipe_component`. Tenant row security is forced. `groundwork_app` is the only grantee. There is no foreign key to `job` or `location`. ADR 0010.
 - Added the cost-recipe state machine. `draft -> active -> archived`. An edit of an active recipe creates the next version as a draft, and activating that draft archives the previous one. Anything else is 409.
 - Added the catalog, takeoff item, recipe, preview, and formula routes. CSV import upserts by SKU and can return a diff without writing. Linking a recipe to a takeoff item of a different measure kind is 409. Deleting a catalog item that a component uses archives it. Roles without `catalog.manage` do not receive costs. `catalog.manage` was already seeded in `0002`.
 - `GET /catalog-items` is no longer the visibility fixture. The visibility rule is unchanged.
+- Scripts that load the API build `@groundwork/api`'s workspace dependencies first, the same way they already built `@groundwork/shared`.
+
+### Imagery ingest
+
+- Added `0004_imagery_ingest.sql` for `imagery_ingest_job` and the capture status trigger. `groundwork_app` can write a global imagery row only while `app.imagery_admin` is `on` for that transaction. ADR 0008.
+- Added `services/imagery-ingest`. It converts the committed 4-band fixture GeoTIFF to a COG. NC ortho, Helene 2025, and NAIP download one configured HTTPS GeoTIFF only when the live-fetch env vars are set. CI does not set them.
+- Added `POST /imagery/ingest`, `GET /imagery/ingest/:jobId`, and `GET/POST/PATCH /admin/imagery-sources`. The caller needs a session, an active membership, and the `owner` or `admin` role. Other roles get 403. All five routes are tagged `tenant-header`, so a session that is not a member gets 404. Illegal capture transitions return 409.
+- The office app has an Imagery screen for owner and admin. The Python unit tests run in `check`. The imagery CI job runs the fixture ingest through MinIO and TiTiler. Recorded the spec gaps in `docs/specs/OPEN-QUESTIONS.md`. The spec files were not edited.
 
 ### Ticket 02 — Auth and workspaces
 
