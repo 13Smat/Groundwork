@@ -6,6 +6,9 @@ const serverEnv = {
   HOST: "127.0.0.1",
   BETTER_AUTH_URL: "http://127.0.0.1:5173",
   WEB_ORIGIN: "http://127.0.0.1:5173",
+  GROUNDWORK_AI_ASSIST: "1",
+  CV_SERVICE_URL: "http://127.0.0.1:8090",
+  CV_BACKEND: "mock",
 };
 
 export default defineConfig({
@@ -19,7 +22,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: "**/takeoff-editor.spec.ts",
+      testIgnore: ["**/takeoff-editor.spec.ts", "**/takeoff-assist.spec.ts"],
     },
     {
       name: "chromium-gl",
@@ -27,14 +30,20 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1100 },
       },
-      testMatch: "**/takeoff-editor.spec.ts",
+      testMatch: ["**/takeoff-editor.spec.ts", "**/takeoff-assist.spec.ts"],
     },
   ],
   webServer: [
     {
+      command: "sh scripts/e2e-cv.sh",
+      url: "http://127.0.0.1:8090/healthz",
+      timeout: 180_000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
       command: "pnpm build:api-deps && pnpm --filter @groundwork/api exec tsx test/e2e-server.ts",
       url: "http://127.0.0.1:3001/healthz",
-      timeout: 120_000,
+      timeout: 180_000,
       reuseExistingServer: !process.env.CI,
       env: serverEnv,
     },

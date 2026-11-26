@@ -1,6 +1,7 @@
 import { displayFromMetric } from "@groundwork/geo";
 import {
   createId,
+  DETECTION_RUN_STATUSES,
   hasPermission,
   IllegalTakeoffTransitionError,
   isTakeoffStatus,
@@ -21,6 +22,12 @@ import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
 import { runAssist, type AssistRequest } from "./assist.js";
+import {
+  acceptDetectionRun,
+  getDetectionRun,
+  rejectDetectionRun,
+  type ReviewSelection,
+} from "./review.js";
 import {
   advanceTakeoff,
   CAPTURE_CONFIRM_DETAIL,
@@ -194,6 +201,46 @@ const assistResponse = z.object({
       }),
     }),
   ),
+});
+
+const reviewSelection = z
+  .object({
+    all: z.boolean().optional(),
+    feature_ids: z.array(z.uuidv7()).max(2_000).optional(),
+  })
+  .strict();
+
+const draftFeatureSchema = z.object({
+  id: z.string(),
+  geometry: geometrySchema,
+  properties: z.object({
+    class: z.string().nullable(),
+    score: z.number().nullable(),
+    area_m2: z.string(),
+    takeoff_item_id: z.string().nullable(),
+    accepted_measurement_id: z.string().nullable(),
+  }),
+});
+
+const detectionRunSchema = z.object({
+  id: z.string(),
+  takeoff_id: z.string(),
+  status: z.enum(DETECTION_RUN_STATUSES),
+  features: z.array(draftFeatureSchema),
+  overlaps: z.array(
+    z.object({
+      feature_id: z.string(),
+      measurement_id: z.string(),
+    }),
+  ),
+});
+
+const reviewResultSchema = z.object({
+  run_id: z.string(),
+  status: z.enum(["accepted_partial", "accepted_all"]),
+  accepted_feature_ids: z.array(z.string()),
+  rejected_feature_ids: z.array(z.string()),
+  measurements: z.array(featureSchema),
 });
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,200}$/;
@@ -608,6 +655,88 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
         body,
         idempotencyKey: idempotencyKeyFrom(request.headers["idempotency-key"]),
       });
+    },
+  );
+
+  app.get(
+    "/detections/:id",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        response: { 200: detectionRunSchema },
+      },
+    },
+    async (request) => {
+      const scope = await inWorkspace(request, "read", async ({ workspaceId }) => ({
+        workspaceId,
+      }));
+      return getDetectionRun(ctx.db, {
+        workspaceId: scope.workspaceId,
+        runId: request.params.id,
+      });
+    },
+  );
+
+  app.post(
+    "/detections/:id/accept",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        body: reviewSelection,
+        response: { 200: reviewResultSchema },
+      },
+    },
+    async (request) => {
+      const scope = await inWorkspace(request, "write", async ({ workspaceId, member }) => ({
+        workspaceId,
+        memberId: member.id,
+      }));
+      const result = await acceptDetectionRun(ctx.db, {
+        workspaceId: scope.workspaceId,
+        memberId: scope.memberId,
+        runId: request.params.id,
+        selection: request.body satisfies ReviewSelection,
+      });
+      return {
+        run_id: result.run_id,
+        status: result.status,
+        accepted_feature_ids: result.accepted_feature_ids,
+        rejected_feature_ids: result.rejected_feature_ids,
+        measurements: result.measurements.map(presentFeature),
+      };
+    },
+  );
+
+  app.post(
+    "/detections/:id/reject",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        body: reviewSelection,
+        response: { 200: reviewResultSchema },
+      },
+    },
+    async (request) => {
+      const scope = await inWorkspace(request, "write", async ({ workspaceId, member }) => ({
+        workspaceId,
+        memberId: member.id,
+      }));
+      const result = await rejectDetectionRun(ctx.db, {
+        workspaceId: scope.workspaceId,
+        memberId: scope.memberId,
+        runId: request.params.id,
+        selection: request.body,
+      });
+      return {
+        run_id: result.run_id,
+        status: result.status,
+        accepted_feature_ids: result.accepted_feature_ids,
+        rejected_feature_ids: result.rejected_feature_ids,
+        measurements: result.measurements.map(presentFeature),
+      };
     },
   );
 

@@ -7,6 +7,7 @@ import { message } from "../crm/messages";
 import type { Location } from "../crm/types";
 import { useWorkspace } from "../crm/workspace";
 import { api } from "../session";
+import { AssistPanel } from "./assist-panel";
 import type { DrawApi } from "./editor-map";
 import { TakeoffMap } from "./editor-map";
 import { allowedCaptures, captureOptionLabel } from "./imagery";
@@ -19,7 +20,9 @@ import {
   kindForMode,
   measurementGeometry,
   mergeCommit,
+  toLoadFeatures,
 } from "./quantities";
+import { useAssist } from "./use-assist";
 import type {
   CommitFeature,
   DrawTool,
@@ -38,7 +41,7 @@ export default function TakeoffEditorPage({
   jobId: string;
   takeoffId: string;
 }) {
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, aiAssist } = useWorkspace();
   const client = useQueryClient();
   const takeoff = useQuery({
     queryKey: ["takeoff", takeoffId],
@@ -90,6 +93,7 @@ export default function TakeoffEditorPage({
   const apiRef = useRef<DrawApi | null>(null);
   const toolRef = useRef(tool);
   const pendingLoad = useRef<ReturnType<typeof editorFeaturesFrom>["load"] | null>(null);
+  const pendingSelect = useRef<string | null>(null);
   const seeded = useRef(false);
 
   useEffect(() => {
@@ -114,6 +118,11 @@ export default function TakeoffEditorPage({
     }
     api.load(load);
     pendingLoad.current = null;
+    const select = pendingSelect.current;
+    if (select) {
+      pendingSelect.current = null;
+      api.selectFeature(select);
+    }
   }, [features, mapReady]);
 
   useEffect(() => {
@@ -135,6 +144,43 @@ export default function TakeoffEditorPage({
   const currentCapture =
     allowed.find((capture) => capture.id === takeoff.data?.imagery_capture_id) ?? null;
   const readOnly = takeoff.data?.status === "final";
+  const areaChoice =
+    (selectedItem?.measure_kind === "area" ? selectedItem : null) ??
+    catalog.find((item) => item.measure_kind === "area") ??
+    null;
+  const areaItem = areaChoice
+    ? { id: areaChoice.id, color: itemColor(areaChoice.color, catalog.indexOf(areaChoice)) }
+    : null;
+  const assist = useAssist({
+    enabled: aiAssist,
+    readOnly,
+    takeoffId,
+    captureId: takeoff.data?.imagery_capture_id ?? null,
+    areaItem,
+    measurements: features ?? [],
+    onAccepted(accepted) {
+      const built = editorFeaturesFrom(
+        { type: "FeatureCollection", features: accepted, corrections: [], overlaps: [] },
+        catalog,
+      );
+      setFeatures((current) => {
+        const base = current ?? [];
+        const ids = new Set(base.map((feature) => feature.id));
+        const next = [...base, ...built.features.filter((feature) => !ids.has(feature.id))];
+        pendingLoad.current = toLoadFeatures(next, catalog);
+        return next;
+      });
+      const first = built.features[0];
+      if (first) {
+        pendingSelect.current = first.id;
+        setSelectedFeatureId(first.id);
+      }
+      setTool("select");
+      setSaveStatus("");
+      void client.invalidateQueries({ queryKey: ["takeoff-summary", takeoffId] });
+      void client.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
+    },
+  });
 
   function onReady(api: DrawApi) {
     apiRef.current = api;
@@ -144,6 +190,11 @@ export default function TakeoffEditorPage({
     if (load) {
       api.load(load);
       pendingLoad.current = null;
+    }
+    const select = pendingSelect.current;
+    if (select) {
+      pendingSelect.current = null;
+      api.selectFeature(select);
     }
   }
 
@@ -168,7 +219,15 @@ export default function TakeoffEditorPage({
     if (next !== "ruler") {
       setRuler(null);
     }
+    if (next !== "select") {
+      assist.setPrompt("off");
+    }
     setTool(next);
+  }
+
+  function onAssistPrompt(mode: "positive" | "negative" | "box") {
+    chooseTool("select");
+    assist.setPrompt(mode);
   }
 
   function onSelectItem(id: string) {
@@ -388,6 +447,31 @@ export default function TakeoffEditorPage({
           <p className="text-sm text-muted">
             The parcel outline is a reference. Measurements are not clipped to it.
           </p>
+          <AssistPanel
+            enabled={aiAssist}
+            on={assist.on}
+            prompt={assist.prompt}
+            busy={assist.busy}
+            canReview={assist.canReview}
+            overlap={assist.overlap}
+            status={assist.status}
+            alert={assist.alert}
+            readOnly={readOnly}
+            onToggle={(checked) => {
+              if (checked) {
+                chooseTool("select");
+              }
+              assist.setEnabled(checked);
+            }}
+            onPrompt={onAssistPrompt}
+            onAccept={() => {
+              void assist.accept();
+            }}
+            onRefine={assist.refine}
+            onDiscard={() => {
+              void assist.discard();
+            }}
+          />
           {workspaceId ? (
             <TakeoffMap
               workspaceId={workspaceId}
@@ -396,6 +480,10 @@ export default function TakeoffEditorPage({
               parcel={location.data?.site_geom ?? null}
               activeItem={activeItem}
               hiddenItemIds={hiddenItemIds}
+              assistMode={aiAssist ? assist.prompt : "off"}
+              assistDrafts={aiAssist ? assist.drafts : undefined}
+              onAssistPoint={assist.onPoint}
+              onAssistBox={assist.onBox}
               onReady={onReady}
               onCommit={onCommit}
               onSelect={setSelectedFeatureId}

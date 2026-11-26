@@ -200,7 +200,9 @@ Spec 03's job page includes an Activity tab and Files/Photos. The API table does
 
 ## Assist statuses, the draft columns, and the single-capture seam
 
-Spec 01's `detection_run` check stops at `cancelled`. Spec 05 also moves a succeeded run to `accepted_partial` or `accepted_all`. [ADR 0016](../adr/0016-ai-takeoff-assist.md) puts both in the check and in `DetectionRun`. This slice does not expose the accept transition. Accepting a draft into a measurement, including `measurement.source = ai_assist`, waits for spec 05 part 2.
+Spec 01's `detection_run` check stops at `cancelled`. Spec 05 also moves a succeeded run to `accepted_partial` or `accepted_all`. [ADR 0016](../adr/0016-ai-takeoff-assist.md) puts both in the check and in `DetectionRun`. [ADR 0018](../adr/0018-ai-assist-acceptance.md) exposes that transition. A review that does not keep every draft, including a discard of all of them, closes as `accepted_partial`. Spec 05 has no rejected status, so this slice does not add one.
+
+Spec 05 part b maps a detection class to a takeoff item. This slice still uses `detection_feature.takeoff_item_id` from the assist request. `GET /detections/:id` returns status, features, and overlaps. Spec 05's progress percent is not on that response. The assist call in this slice is synchronous.
 
 The spec 01 sketch has no `takeoff_item_id` on `detection_feature` and no idempotency columns on `detection_run`. ADR 0016 stores the area item from the request and stores `idempotency_key` plus `request_hash`. The header is `Idempotency-Key`. A missing header gets a new id. The same key and body replay a succeeded run. A different body returns 409.
 

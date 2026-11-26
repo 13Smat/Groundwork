@@ -19,6 +19,15 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 
 import type { GeoJsonGeometry } from "@groundwork/geo";
 
+import {
+  applyAssistMode,
+  bindAssistPointers,
+  clearDraftLayer,
+  syncDraftLayer,
+  type AssistBox,
+  type AssistDraft,
+  type AssistPromptMode,
+} from "./assist-layer";
 import { tileTemplate } from "./imagery";
 import { kindForMode, liveTotal } from "./quantities";
 import type {
@@ -200,6 +209,10 @@ export function TakeoffMap({
   onLive,
   onRuler,
   onReject,
+  assistMode,
+  assistDrafts,
+  onAssistPoint,
+  onAssistBox,
 }: {
   workspaceId: string;
   captureId: string;
@@ -213,6 +226,10 @@ export function TakeoffMap({
   onLive: (text: string | null) => void;
   onRuler: (text: string | null) => void;
   onReject: (message: string) => void;
+  assistMode?: AssistPromptMode;
+  assistDrafts?: readonly AssistDraft[];
+  onAssistPoint?: (lng: number, lat: number) => void;
+  onAssistBox?: (box: AssistBox) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -229,6 +246,9 @@ export function TakeoffMap({
   const onLiveRef = useRef(onLive);
   const onRulerRef = useRef(onRuler);
   const onRejectRef = useRef(onReject);
+  const assistModeRef = useRef<AssistPromptMode>(assistMode ?? "off");
+  const onAssistPointRef = useRef(onAssistPoint);
+  const onAssistBoxRef = useRef(onAssistBox);
 
   useEffect(() => {
     workspaceRef.current = workspaceId;
@@ -242,6 +262,9 @@ export function TakeoffMap({
     onLiveRef.current = onLive;
     onRulerRef.current = onRuler;
     onRejectRef.current = onReject;
+    assistModeRef.current = assistMode ?? "off";
+    onAssistPointRef.current = onAssistPoint;
+    onAssistBoxRef.current = onAssistBox;
   }, [
     activeItem,
     captureId,
@@ -252,6 +275,9 @@ export function TakeoffMap({
     onReject,
     onRuler,
     onSelect,
+    assistMode,
+    onAssistBox,
+    onAssistPoint,
     workspaceId,
   ]);
 
@@ -266,6 +292,7 @@ export function TakeoffMap({
     let cancelled = false;
     let map: MapLibreMap | undefined;
     let draw: TerraDraw | undefined;
+    let unbindAssist: (() => void) | undefined;
     const gate = { silent: false, key: "" };
     const currentPoint = pointKey === "" ? null : parsePoint(pointKey);
     const currentParcel = parcelKey === "" ? null : (JSON.parse(parcelKey) as ReferenceParcel);
@@ -595,6 +622,11 @@ export function TakeoffMap({
             },
           };
           if (!cancelled) {
+            unbindAssist = bindAssistPointers(map, {
+              mode: () => assistModeRef.current,
+              onPoint: (lng, lat) => onAssistPointRef.current?.(lng, lat),
+              onBox: (box) => onAssistBoxRef.current?.(box),
+            });
             onReadyRef.current(api);
             setStatus("Map ready");
             setGeneration((value) => value + 1);
@@ -610,6 +642,7 @@ export function TakeoffMap({
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      unbindAssist?.();
       try {
         draw?.stop();
       } catch {
@@ -633,6 +666,32 @@ export function TakeoffMap({
       (source as RasterTileSource).setTiles([tileTemplate(captureId)]);
     }
   }, [captureId, generation]);
+
+  useEffect(() => {
+    if (generation === 0) {
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    applyAssistMode(map, assistMode ?? "off");
+  }, [assistMode, generation]);
+
+  useEffect(() => {
+    if (generation === 0) {
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    if (assistDrafts === undefined) {
+      clearDraftLayer(map);
+      return;
+    }
+    syncDraftLayer(map, assistDrafts);
+  }, [assistDrafts, generation]);
 
   return (
     <div className="flex flex-col gap-2">

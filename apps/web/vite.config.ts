@@ -52,6 +52,7 @@ export default defineConfig({
       "/line-items": proxy,
       "/takeoffs": proxy,
       "/measurements": proxy,
+      "/detections": proxy,
       "/search": proxy,
       "/pipeline": proxy,
       "/imagery": proxy,
