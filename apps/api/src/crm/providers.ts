@@ -100,6 +100,13 @@ export function fixtureParcelId(point: LatLng): string {
   return `fixture:${round5(point.lat).toFixed(5)}:${round5(point.lng).toFixed(5)}`;
 }
 
+/** East/west lot offset. The lots stay inside a 2 km search of the subject point. */
+export const FIXTURE_LOT_SHIFT_LNG = 0.0005;
+
+export function fixtureNeighborParcelId(point: LatLng, side: "e" | "w"): string {
+  return `${fixtureParcelId(point)}:${side}`;
+}
+
 export function createFixtureGeocoder(): GeocoderProvider {
   return {
     async geocode(query) {
@@ -128,6 +135,15 @@ export function createFixtureGeocoder(): GeocoderProvider {
   };
 }
 
+function neighborLot(point: LatLng, side: "e" | "w"): ParcelCandidate {
+  const shift = side === "e" ? FIXTURE_LOT_SHIFT_LNG : -FIXTURE_LOT_SHIFT_LNG;
+  return {
+    providerParcelId: fixtureNeighborParcelId(point, side),
+    geom: square({ lat: point.lat, lng: point.lng + shift }),
+    attrs: { fixture: true, allows_ml_training: false, lot: side },
+  };
+}
+
 export function createFixtureParcelProvider(): ParcelProvider {
   return {
     name: "fixture",
@@ -138,6 +154,8 @@ export function createFixtureParcelProvider(): ParcelProvider {
           geom: square(point),
           attrs: { fixture: true, allows_ml_training: false },
         },
+        neighborLot(point, "e"),
+        neighborLot(point, "w"),
       ];
     },
   };

@@ -126,7 +126,7 @@ Resolved by [ADR 0004](../adr/0004-node-24.md). The runtime is Node 24 LTS. `.nv
 
 `docs/specs/04-map-takeoff-manual.md` forbids Google Maps Platform and Mapbox satellite as a measurement or AI input, and says a non-measurement context basemap is "OK only ... with attribution, if at all." Which basemap, if any, is not chosen.
 
-`GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed.
+`GET /takeoffs/:id/export?format=png` and the proposal site-map image in spec 08 are required. The spec does not say whether the PNG is rendered in the browser, by Playwright, or by TiTiler, or how the overlay is composed. [ADR 0017](../adr/0017-takeoff-tools-export.md) renders it in the API as a schematic with the provider, date, GSD, and attribution. It does not composite a COG. A photo for proposals is still open.
 
 ## `locationId` on `GET /imagery/captures` before the location table exists
 
@@ -211,3 +211,7 @@ Spec 05 says a site that crosses a seam is 409. ADR 0016 treats a seam as the ch
 The chip's longest side is at most 4096 px, resampled if the window is larger. Tiled windows are deferred. The API downloads the whole COG (refusing objects over 512 MiB) and crops a local file. A range read is later work. Simplification uses `0.5 * capture GSD` converted to pixels from the measured ground pixel size, then PostGIS warps to EPSG:4326. Polygons under 2 m² are dropped.
 
 The route is off unless `GROUNDWORK_AI_ASSIST` is `1` and `workspace.features.ai_assist` is true. The spec does not name the env flag. The mock reports `gpu_seconds = 0` and `cost_estimate_cents = 0`. `POST /segment/classes` returns no polygons. A final takeoff is 409. The spec files were not edited.
+
+## Parcel search radius, PNG imagery pixels, and the feature-tile budget
+
+Spec 04 asks for parcels in the current view and a PNG site map that includes the imagery. [ADR 0017](../adr/0017-takeoff-tools-export.md) returns `parcel_cache` rows that intersect the bbox and lie within 2 km of the location point, capped at 50. The PNG is a schematic of the measurement outlines. The provider, capture date, GSD, and attribution are drawn and stored in PNG text. It does not composite COG pixels: the database CI job has no imagery store, and the export must not call a paid tile service. A photo site map for proposals is still open. Feature tiles are GeoJSON, 500 features, and 30 requests per 10 seconds per workspace per API process. The spec files were not edited.

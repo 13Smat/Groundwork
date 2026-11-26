@@ -14,6 +14,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Mailer } from "../src/auth/mail.js";
 import { buildApp } from "../src/app.js";
+import { fixtureNeighborParcelId, fixtureParcelId } from "../src/crm/providers.js";
+import {
+  lngLatToTile,
+  resetFeatureTileThrottle,
+  TILE_CALL_LIMIT,
+} from "../src/takeoff/feature-tiles.js";
 import { readAppDatabaseUrl, readAuthDatabaseUrl, readDatabaseUrl } from "../src/config.js";
 import { createPool } from "../src/db/client.js";
 import { migrate } from "../src/db/migrate.js";
@@ -839,6 +845,165 @@ describe("takeoff measurements", () => {
       headers: headers(crew.cookie),
     });
     expect(crewList.statusCode, crewList.body).toBe(403);
+  });
+
+  it("returns parcels that intersect a bbox near the site", async () => {
+    const job = await createJob();
+    const location = await requireApp().inject({
+      method: "GET",
+      url: `/locations/${job.location_id}`,
+      headers: headers(owner.cookie),
+    });
+    expect(location.statusCode, location.body).toBe(200);
+    const point = location.json().point as { lat: number; lng: number };
+    const pad = 0.002;
+    const bbox = [point.lng - pad, point.lat - pad, point.lng + pad, point.lat + pad].join(",");
+    const listed = await requireApp().inject({
+      method: "GET",
+      url: `/locations/${job.location_id}/parcels?bbox=${encodeURIComponent(bbox)}`,
+      headers: headers(owner.cookie),
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    const ids = (
+      listed.json().parcels as { provider_parcel_id: string; geom: { type: string } }[]
+    ).map((parcel) => parcel.provider_parcel_id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        fixtureParcelId(point),
+        fixtureNeighborParcelId(point, "e"),
+        fixtureNeighborParcelId(point, "w"),
+      ]),
+    );
+    expect(listed.json().parcels[0].geom.type).toBe("MultiPolygon");
+    const far = await requireApp().inject({
+      method: "GET",
+      url: `/locations/${job.location_id}/parcels?bbox=-100,35,-99,36`,
+      headers: headers(owner.cookie),
+    });
+    expect(far.statusCode, far.body).toBe(200);
+    expect(far.json().parcels).toEqual([]);
+    const missing = await requireApp().inject({
+      method: "GET",
+      url: `/locations/${job.location_id}/parcels`,
+      headers: headers(owner.cookie),
+    });
+    expect(missing.statusCode, missing.body).toBe(400);
+    const other = await signUp("Parcel Other");
+    const otherWorkspace = await createWorkspace(other.cookie, "Parcel Other Co");
+    const hidden = await requireApp().inject({
+      method: "GET",
+      url: `/locations/${job.location_id}/parcels?bbox=${encodeURIComponent(bbox)}`,
+      headers: headers(other.cookie, otherWorkspace.id),
+    });
+    expect(hidden.statusCode, hidden.body).toBe(404);
+  });
+
+  it("exports GeoJSON and a stamped PNG, and hides them across workspaces", async () => {
+    const job = await createJob();
+    const item = await createItem("Export asphalt", "area", "ft2");
+    const takeoff = await createTakeoff(job.id, job.location_id);
+    const saved = await putFeatures(takeoff.id, [
+      {
+        id: createId(),
+        takeoff_item_id: item,
+        kind: "area",
+        geom: squareAt(35.748741, -81.702576),
+        source: "manual",
+      },
+    ]);
+    expect(saved.status, saved.raw).toBe(200);
+    const geo = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/export?format=geojson`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(geo.statusCode, geo.body).toBe(200);
+    expect(geo.headers["content-type"]).toContain("application/geo+json");
+    const collection = geo.json() as {
+      type: string;
+      features: { geometry: { type: string } }[];
+      imagery: {
+        provider: string;
+        name: string;
+        capture_date: string;
+        gsd_cm: string;
+        attribution: string;
+      };
+    };
+    expect(collection.type).toBe("FeatureCollection");
+    expect(collection.features).toHaveLength(1);
+    expect(collection.features[0]?.geometry.type).toBe("Polygon");
+    expect(collection.imagery.provider).toBe("nc_helene_2025");
+    expect(collection.imagery.name).toBe("nc_helene_2025");
+    expect(collection.imagery.capture_date).toBe("2025-04-15");
+    expect(Number(collection.imagery.gsd_cm)).toBeCloseTo(15.24, 2);
+    expect(collection.imagery.attribution).toContain("NC Collaboratory");
+    const png = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/export?format=png`,
+      headers: headers(owner.cookie, workspaceId, false),
+    });
+    expect(png.statusCode, png.body.slice(0, 80)).toBe(200);
+    expect(png.headers["content-type"]).toContain("image/png");
+    const bytes = png.rawPayload;
+    expect(bytes.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(bytes.length).toBeGreaterThan(500);
+    const text = bytes.toString("latin1");
+    expect(text).toContain("NC Collaboratory");
+    expect(text).toContain("2025-04-15");
+    expect(text).toContain("15.24");
+    expect(text).toContain("nc_helene_2025");
+    const other = await signUp("Export Other");
+    const otherWorkspace = await createWorkspace(other.cookie, "Export Other Co");
+    const hidden = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/export?format=geojson`,
+      headers: headers(other.cookie, otherWorkspace.id, false),
+    });
+    expect(hidden.statusCode, hidden.body).toBe(404);
+  });
+
+  it("returns measurements in a tile and throttles the workspace", async () => {
+    resetFeatureTileThrottle();
+    const job = await createJob();
+    const item = await createItem("Tile asphalt", "area", "ft2");
+    const takeoff = await createTakeoff(job.id, job.location_id);
+    const origin = { lng: -81.702576, lat: 35.748741 };
+    const saved = await putFeatures(takeoff.id, [
+      {
+        id: createId(),
+        takeoff_item_id: item,
+        kind: "area",
+        geom: squareAt(origin.lat, origin.lng),
+        source: "manual",
+      },
+    ]);
+    expect(saved.status, saved.raw).toBe(200);
+    const tile = lngLatToTile(origin.lng, origin.lat, 16);
+    const first = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/measurements/tiles/16/${tile.x}/${tile.y}`,
+      headers: headers(owner.cookie),
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json().type).toBe("FeatureCollection");
+    expect(first.json().features).toHaveLength(1);
+    const outside = await requireApp().inject({
+      method: "GET",
+      url: `/takeoffs/${takeoff.id}/measurements/tiles/16/0/0`,
+      headers: headers(owner.cookie),
+    });
+    expect(outside.statusCode, outside.body).toBe(200);
+    expect(outside.json().features).toEqual([]);
+    let limited = first;
+    for (let call = 2; call <= TILE_CALL_LIMIT + 1; call += 1) {
+      limited = await requireApp().inject({
+        method: "GET",
+        url: `/takeoffs/${takeoff.id}/measurements/tiles/16/${tile.x}/${tile.y}`,
+        headers: headers(owner.cookie),
+      });
+    }
+    expect(limited.statusCode, limited.body).toBe(429);
   });
 
   it("rejects an illegal status update in the database", async () => {

@@ -41,6 +41,14 @@ export type CaptureRecord = {
   gsd_cm: string;
 };
 
+export type ImageryStamp = {
+  provider: string;
+  name: string;
+  capture_date: string;
+  gsd_cm: string;
+  attribution: string | null;
+};
+
 export type StoredFeature = {
   id: string;
   takeoff_item_id: string;
@@ -213,6 +221,24 @@ export async function loadCapture(trx: Trx, captureId: string): Promise<CaptureR
       (s.verified_at is not null) as verified,
       c.capture_date::text as capture_date,
       c.gsd_cm::text as gsd_cm
+    from imagery_capture c
+    join imagery_source s on s.id = c.source_id
+    where c.id = ${captureId}::uuid
+  `.execute(trx);
+  return result.rows[0];
+}
+
+export async function loadImageryStamp(
+  trx: Trx,
+  captureId: string,
+): Promise<ImageryStamp | undefined> {
+  const result = await sql<ImageryStamp>`
+    select
+      s.provider,
+      s.name,
+      left(c.capture_date::text, 10) as capture_date,
+      c.gsd_cm::text as gsd_cm,
+      s.attribution
     from imagery_capture c
     join imagery_source s on s.id = c.source_id
     where c.id = ${captureId}::uuid
@@ -531,6 +557,38 @@ export async function listFeatures(trx: Trx, takeoffId: string): Promise<StoredF
     from measurement
     where takeoff_id = ${takeoffId}::uuid
     order by created_at, id
+  `.execute(trx);
+  return result.rows.map(presentFeature);
+}
+
+export async function listFeaturesInBbox(
+  trx: Trx,
+  takeoffId: string,
+  bbox: { west: number; south: number; east: number; north: number },
+  limit: number,
+): Promise<StoredFeature[]> {
+  const result = await sql<FeatureRow>`
+    select
+      id::text as id,
+      takeoff_item_id::text as takeoff_item_id,
+      kind,
+      value_m2::text as value_m2,
+      value_m::text as value_m,
+      count,
+      source,
+      confidence,
+      label,
+      deductions,
+      ST_AsGeoJSON(geom) as geojson
+    from measurement
+    where takeoff_id = ${takeoffId}::uuid
+      and geom && ST_MakeEnvelope(${bbox.west}, ${bbox.south}, ${bbox.east}, ${bbox.north}, 4326)
+      and ST_Intersects(
+        geom,
+        ST_MakeEnvelope(${bbox.west}, ${bbox.south}, ${bbox.east}, ${bbox.north}, 4326)
+      )
+    order by created_at, id
+    limit ${limit}
   `.execute(trx);
   return result.rows.map(presentFeature);
 }

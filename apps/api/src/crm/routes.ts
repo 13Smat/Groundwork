@@ -20,6 +20,7 @@ import { workspaceIdFromHeader } from "../auth/hook.js";
 import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
+import { parseBBox } from "../imagery/policy.js";
 import { presignDownload, presignUpload, workspaceStorageKey } from "../storage/s3.js";
 import { crmAccess, jobAccess, type JobAccess, type RecordAccess } from "./access.js";
 import {
@@ -46,6 +47,7 @@ import {
   listJobs,
   listLocations,
   listNotes,
+  listParcelsInBbox,
   listTasks,
   pipelineSummary,
   recordUsage,
@@ -732,6 +734,45 @@ export async function registerCrmRoutes(
         throw notFound("That location was not found.");
       }
       return presentLocation(row);
+    },
+  );
+
+  routes.get(
+    "/locations/:id/parcels",
+    {
+      schema: {
+        ...tenant,
+        params: idParams,
+        querystring: z.object({ bbox: z.string().optional() }),
+        response: {
+          200: z.object({
+            parcels: z.array(
+              z.object({
+                id: z.string(),
+                provider: z.string(),
+                provider_parcel_id: z.string(),
+                geom: multiPolygon,
+                attrs: z.record(z.string(), z.unknown()),
+              }),
+            ),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      const tenant = await requireTenant(request, "crm", "read");
+      const raw = request.query.bbox;
+      if (raw === undefined || raw.trim() === "") {
+        throw badRequest("bbox must be west,south,east,north.");
+      }
+      const bbox = parseBBox(raw);
+      const parcels = await withWorkspaceContext(options.db, tenant.workspaceId, (trx) =>
+        listParcelsInBbox(trx, request.params.id, assignedFor(tenant, "crm"), bbox),
+      );
+      if (!parcels) {
+        throw notFound("That location was not found.");
+      }
+      return { parcels };
     },
   );
 

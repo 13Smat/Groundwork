@@ -4,6 +4,7 @@ import {
   MORGANTON_MAIN,
   createFixtureGeocoder,
   createFixtureParcelProvider,
+  fixtureNeighborParcelId,
   fixtureParcelId,
 } from "./providers.js";
 
@@ -37,7 +38,10 @@ describe("fixture geocoder and parcel provider", () => {
     const first = await parcels.lookup(point);
     const second = await parcels.lookup(point);
     expect(second).toEqual(first);
+    expect(first).toHaveLength(3);
     expect(first[0]?.providerParcelId).toBe(fixtureParcelId(point));
+    expect(first[1]?.providerParcelId).toBe(fixtureNeighborParcelId(point, "e"));
+    expect(first[2]?.providerParcelId).toBe(fixtureNeighborParcelId(point, "w"));
     expect(first[0]?.geom.type).toBe("MultiPolygon");
     expect(first[0]?.attrs.allows_ml_training).toBe(false);
     expect(parcels.name).toBe("fixture");

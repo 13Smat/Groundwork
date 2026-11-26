@@ -4,7 +4,7 @@ import type { SiteGeom } from "../crm/types";
 
 export type MeasureKind = "area" | "length" | "count";
 export type MeasureSource = "manual" | "ai_assist" | "ai_auto";
-export type DrawTool = "select" | "polygon" | "linestring" | "point" | "ruler";
+export type DrawTool = "select" | "polygon" | "linestring" | "point" | "ruler" | "hole" | "split";
 export type DrawMode = "polygon" | "linestring" | "point";
 
 export type ImageryCapture = {

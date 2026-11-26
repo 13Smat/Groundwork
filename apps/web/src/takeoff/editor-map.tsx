@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Map as MapLibreMap,
   setWorkerUrl,
+  type GeoJSONSource,
   type RasterTileSource,
   type StyleSpecification,
 } from "maplibre-gl";
@@ -29,7 +30,10 @@ import {
   type AssistPromptMode,
 } from "./assist-layer";
 import { tileTemplate } from "./imagery";
+import { clearMass, paintMass } from "./mass-layer";
 import { kindForMode, liveTotal } from "./quantities";
+import { renderStrategy } from "./render-budget";
+import { applySnap, type SnapHost } from "./snap";
 import type {
   ActiveItem,
   CommitFeature,
@@ -52,6 +56,17 @@ export type DrawApi = {
   selectFeature: (id: string) => void;
   finish: () => void;
   replaceGeometry: (id: string, geometry: GeoJsonGeometry) => void;
+  setSnap: (enabled: boolean) => void;
+  setItem: (id: string, item: { itemId: string; color: `#${string}`; kind: MeasureKind }) => void;
+  setParcels: (parcels: readonly ParcelPick[]) => void;
+};
+
+export type SketchEvent = { intent: "hole" | "split"; geometry: GeoJsonGeometry };
+
+export type ParcelPick = {
+  id: string;
+  selected: boolean;
+  geometry: { type: "MultiPolygon"; coordinates: number[][][][] };
 };
 
 type LatLng = { lat: number; lng: number };
@@ -154,6 +169,31 @@ function tileFailure(message: string): boolean {
  * Parcel and site pin are ordinary GeoJSON layers. They are not Terra Draw
  * features, so they cannot be edited and they never clip a measurement.
  */
+function addParcelPick(map: MapLibreMap) {
+  map.addSource("parcel-pick", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "parcel-pick-fill",
+    type: "fill",
+    source: "parcel-pick",
+    paint: {
+      "fill-color": "#1c4e80",
+      "fill-opacity": ["case", ["==", ["get", "selected"], true], 0.28, 0.08],
+    },
+  });
+  map.addLayer({
+    id: "parcel-pick-line",
+    type: "line",
+    source: "parcel-pick",
+    paint: {
+      "line-color": "#1c4e80",
+      "line-width": ["case", ["==", ["get", "selected"], true], 3, 1],
+    },
+  });
+}
+
 function addReference(map: MapLibreMap, point: LatLng | null, parcel: ReferenceParcel | null) {
   if (parcel) {
     map.addSource("parcel", {
@@ -196,6 +236,58 @@ function addReference(map: MapLibreMap, point: LatLng | null, parcel: ReferenceP
   }
 }
 
+function committedIds(draw: {
+  getSnapshot: () => readonly {
+    id?: string | number;
+    properties?: Record<string, unknown>;
+  }[];
+}): string[] {
+  const snapshot = draw.getSnapshot();
+  const handles = new Set<string>();
+  for (const feature of snapshot) {
+    const properties = feature.properties ?? {};
+    for (const key of [
+      "coordinatePointIds",
+      "selectionPointFeatureId",
+      "coordinatePointFeatureId",
+    ]) {
+      const value = properties[key];
+      if (typeof value === "string") {
+        handles.add(value);
+      } else if (Array.isArray(value)) {
+        for (const id of value) {
+          if (typeof id === "string") {
+            handles.add(id);
+          }
+        }
+      }
+    }
+  }
+  return [
+    ...new Set(
+      snapshot
+        .map((feature) => feature.id)
+        .filter((id): id is string => typeof id === "string" && !handles.has(id)),
+    ),
+  ];
+}
+
+function clearDrawn(draw: {
+  getSnapshot: () => readonly {
+    id?: string | number;
+    properties?: Record<string, unknown>;
+  }[];
+  removeFeatures: (ids: string[]) => void;
+}): void {
+  for (const id of committedIds(draw)) {
+    try {
+      draw.removeFeatures([id]);
+    } catch {
+      // Removing a polygon also removes its vertex handles.
+    }
+  }
+}
+
 export function TakeoffMap({
   workspaceId,
   captureId,
@@ -209,6 +301,7 @@ export function TakeoffMap({
   onLive,
   onRuler,
   onReject,
+  onSketch,
   assistMode,
   assistDrafts,
   onAssistPoint,
@@ -226,6 +319,7 @@ export function TakeoffMap({
   onLive: (text: string | null) => void;
   onRuler: (text: string | null) => void;
   onReject: (message: string) => void;
+  onSketch: (event: SketchEvent) => void;
   assistMode?: AssistPromptMode;
   assistDrafts?: readonly AssistDraft[];
   onAssistPoint?: (lng: number, lat: number) => void;
@@ -246,6 +340,8 @@ export function TakeoffMap({
   const onLiveRef = useRef(onLive);
   const onRulerRef = useRef(onRuler);
   const onRejectRef = useRef(onReject);
+  const onSketchRef = useRef(onSketch);
+  const sketchRef = useRef<"measure" | "hole" | "split">("measure");
   const assistModeRef = useRef<AssistPromptMode>(assistMode ?? "off");
   const onAssistPointRef = useRef(onAssistPoint);
   const onAssistBoxRef = useRef(onAssistBox);
@@ -262,6 +358,7 @@ export function TakeoffMap({
     onLiveRef.current = onLive;
     onRulerRef.current = onRuler;
     onRejectRef.current = onReject;
+    onSketchRef.current = onSketch;
     assistModeRef.current = assistMode ?? "off";
     onAssistPointRef.current = onAssistPoint;
     onAssistBoxRef.current = onAssistBox;
@@ -275,6 +372,7 @@ export function TakeoffMap({
     onReject,
     onRuler,
     onSelect,
+    onSketch,
     assistMode,
     onAssistBox,
     onAssistPoint,
@@ -357,6 +455,7 @@ export function TakeoffMap({
           window.clearTimeout(timer);
           addImagery(map, captureRef.current);
           addReference(map, currentPoint, currentParcel);
+          addParcelPick(map);
           const color = () => colorRef.current;
           draw = new TerraDraw({
             adapter: new TerraDrawMapLibreGLAdapter({ map }),
@@ -444,6 +543,17 @@ export function TakeoffMap({
             if (typeof id !== "string") {
               return;
             }
+            const sketch = sketchRef.current;
+            if ((sketch === "hole" || sketch === "split") && context.mode !== "ruler") {
+              const drawn = instance.getSnapshotFeature(id);
+              const geometry = drawn ? asGeometry(drawn.geometry) : null;
+              instance.removeFeatures([id]);
+              publish();
+              if (geometry) {
+                onSketchRef.current({ intent: sketch, geometry });
+              }
+              return;
+            }
             if (context.mode === "ruler") {
               const feature = instance.getSnapshotFeature(id);
               const geometry = feature ? asGeometry(feature.geometry) : null;
@@ -503,26 +613,41 @@ export function TakeoffMap({
           canvas.setAttribute("aria-label", "Takeoff drawing surface");
           const api: DrawApi = {
             setMode(mode) {
-              if (instance.getMode() === "ruler" && mode !== "ruler") {
+              sketchRef.current = mode === "hole" ? "hole" : mode === "split" ? "split" : "measure";
+              const terra = mode === "hole" ? "polygon" : mode === "split" ? "linestring" : mode;
+              if (instance.getMode() === "ruler" && terra !== "ruler") {
                 const rulers = committed()
                   .filter((feature) => feature.mode === "ruler")
                   .map((feature) => feature.id);
-                if (rulers.length > 0) {
-                  instance.removeFeatures(rulers);
+                for (const id of rulers) {
+                  try {
+                    instance.removeFeatures([id]);
+                  } catch {
+                    // The ruler may already have been cleared.
+                  }
                 }
               }
-              instance.setMode(mode);
+              instance.setMode(terra);
             },
             load(features) {
+              if (renderStrategy(features.length) === "throttled") {
+                gate.silent = true;
+                try {
+                  clearDrawn(instance);
+                  if (map) {
+                    paintMass(map, features);
+                  }
+                } finally {
+                  gate.silent = false;
+                }
+                return;
+              }
+              if (map) {
+                clearMass(map);
+              }
               gate.silent = true;
               try {
-                const existing = instance
-                  .getSnapshot()
-                  .map((feature) => feature.id)
-                  .filter((id): id is string => typeof id === "string");
-                if (existing.length > 0) {
-                  instance.removeFeatures(existing);
-                }
+                clearDrawn(instance);
                 if (features.length > 0) {
                   const result = instance.addFeatures(
                     features.map((feature) => ({
@@ -598,6 +723,32 @@ export function TakeoffMap({
               canvas.dispatchEvent(
                 new KeyboardEvent("keyup", { key: "Enter", bubbles: true, cancelable: true }),
               );
+            },
+            setSnap(enabled) {
+              applySnap(instance as unknown as SnapHost, enabled);
+            },
+            setItem(id, item) {
+              instance.updateFeatureProperties(id, {
+                takeoffItemId: item.itemId,
+                itemColor: item.color,
+                measureKind: item.kind,
+              });
+              publish();
+            },
+            setParcels(parcels) {
+              const source = map?.getSource("parcel-pick");
+              if (!source || source.type !== "geojson") {
+                return;
+              }
+              (source as GeoJSONSource).setData({
+                type: "FeatureCollection",
+                features: parcels.map((parcel) => ({
+                  type: "Feature" as const,
+                  id: parcel.id,
+                  properties: { selected: parcel.selected },
+                  geometry: parcel.geometry,
+                })),
+              });
             },
             replaceGeometry(id, geometry) {
               gate.silent = true;
