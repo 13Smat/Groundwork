@@ -80,6 +80,7 @@ const TENANT_ROUTES = [
   "get /takeoffs/{id}/measurements",
   "put /takeoffs/{id}/measurements",
   "delete /measurements/{id}",
+  "post /takeoffs/{id}/assist",
   "get /takeoffs/{id}/summary",
 ];
 
@@ -297,6 +298,12 @@ function tenantPayload(
       return { status: "in_review" };
     case "put /takeoffs/{id}/measurements":
       return { features: [] };
+    case "post /takeoffs/{id}/assist":
+      return {
+        imagery_capture_id: createId(),
+        takeoff_item_id: createId(),
+        points: [{ lng: -81.7, lat: 35.75, label: 1 }],
+      };
     case "post /imagery/ingest":
       return { sourceId: createId(), year: 2026, countyFips: "37023" };
     case "post /admin/imagery-sources":

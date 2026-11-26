@@ -183,3 +183,15 @@ Display rounding names ft², yd², and ft. Acres are in the builder rules and ha
 ## Activity list and file download URL
 
 Spec 03's job page includes an Activity tab and Files/Photos. The API table does not name a read for `audit_log` or a way for the browser to GET a stored object. This UI reads `GET /jobs/:id/activity` (actor, action, `at`, and the stage diff already written by ADR 0009) and adds `download_url` on the file payload, signed the same way as the upload URL. The presign lifetime is still the open question above. The spec files were not edited.
+
+## Assist statuses, the draft columns, and the single-capture seam
+
+Spec 01's `detection_run` check stops at `cancelled`. Spec 05 also moves a succeeded run to `accepted_partial` or `accepted_all`. [ADR 0016](../adr/0016-ai-takeoff-assist.md) puts both in the check and in `DetectionRun`. This slice does not expose the accept transition. Accepting a draft into a measurement, including `measurement.source = ai_assist`, waits for spec 05 part 2.
+
+The spec 01 sketch has no `takeoff_item_id` on `detection_feature` and no idempotency columns on `detection_run`. ADR 0016 stores the area item from the request and stores `idempotency_key` plus `request_hash`. The header is `Idempotency-Key`. A missing header gets a new id. The same key and body replay a succeeded run. A different body returns 409.
+
+Spec 05 says a site that crosses a seam is 409. ADR 0016 treats a seam as the chosen capture failing to cover the site boundary expanded by 10 m. Other program footprints that also overlap the site do not refuse the request. The capture on the request may differ from the capture stored on the takeoff. A location with no `site_geom` is 409. Assist does not read `parcel_cache`.
+
+The chip's longest side is at most 4096 px, resampled if the window is larger. Tiled windows are deferred. The API downloads the whole COG (refusing objects over 512 MiB) and crops a local file. A range read is later work. Simplification uses `0.5 * capture GSD` converted to pixels from the measured ground pixel size, then PostGIS warps to EPSG:4326. Polygons under 2 m² are dropped.
+
+The route is off unless `GROUNDWORK_AI_ASSIST` is `1` and `workspace.features.ai_assist` is true. The spec does not name the env flag. The mock reports `gpu_seconds = 0` and `cost_estimate_cents = 0`. `POST /segment/classes` returns no polygons. A final takeoff is 409. The spec files were not edited.

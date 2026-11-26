@@ -200,6 +200,22 @@ jobs:
           sudo apt-get update && sudo apt-get install -y python3-venv
           pnpm test:imagery-ingest
 
+      - name: CV contract, chip crop, and assist
+        run: |
+          set -eu
+          pnpm test:cv
+          PYTHONPATH=services/cv .venv-imagery/bin/python -m unittest services/cv/tests/test_crop.py -v
+          pnpm test:assist
+        env:
+          DATABASE_URL: postgres://groundwork:groundwork@127.0.0.1:5432/groundwork
+          APP_DATABASE_URL: postgres://groundwork_app:groundwork@127.0.0.1:5432/groundwork
+          APP_DB_PASSWORD: groundwork
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_REGION: us-east-1
+          S3_BUCKET: groundwork
+          S3_ACCESS_KEY_ID: minioadmin
+          S3_SECRET_ACCESS_KEY: minioadmin
+
       - name: Imagery and TiTiler
         run: |
           set -eu

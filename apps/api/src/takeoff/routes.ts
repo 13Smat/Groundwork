@@ -1,5 +1,6 @@
 import { displayFromMetric } from "@groundwork/geo";
 import {
+  createId,
   hasPermission,
   IllegalTakeoffTransitionError,
   isTakeoffStatus,
@@ -19,6 +20,7 @@ import { workspaceIdFromHeader } from "../auth/hook.js";
 import type { Database } from "../db/types.js";
 import { withWorkspaceContext } from "../db/workspace.js";
 import { ProblemError } from "../errors.js";
+import { runAssist, type AssistRequest } from "./assist.js";
 import {
   advanceTakeoff,
   CAPTURE_CONFIRM_DETAIL,
@@ -153,6 +155,59 @@ const summarySchema = z.object({
 });
 
 const idParams = z.object({ id: z.uuidv7() });
+
+const assistBody = z.object({
+  imagery_capture_id: z.uuidv7(),
+  takeoff_item_id: z.uuidv7(),
+  points: z
+    .array(
+      z.object({
+        lng: z.number().gte(-180).lte(180),
+        lat: z.number().gte(-90).lte(90),
+        label: z.union([z.literal(0), z.literal(1)]),
+      }),
+    )
+    .max(32),
+  box: z
+    .object({
+      west: z.number().gte(-180).lte(180),
+      south: z.number().gte(-90).lte(90),
+      east: z.number().gte(-180).lte(180),
+      north: z.number().gte(-90).lte(90),
+    })
+    .optional(),
+});
+
+const assistResponse = z.object({
+  run_id: z.string(),
+  status: z.literal("succeeded"),
+  features: z.array(
+    z.object({
+      id: z.string(),
+      geometry: geometrySchema,
+      properties: z.object({
+        class: z.string().nullable(),
+        score: z.number().nullable(),
+        area_m2: z.string(),
+        takeoff_item_id: z.string().nullable(),
+      }),
+    }),
+  ),
+});
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,200}$/;
+
+function idempotencyKeyFrom(header: string | string[] | undefined): string {
+  if (header === undefined) {
+    return createId();
+  }
+  if (Array.isArray(header) || !IDEMPOTENCY_KEY.test(header)) {
+    throw badRequest(
+      "Idempotency-Key must be 8 to 200 letters, numbers, dots, colons, underscores, or hyphens.",
+    );
+  }
+  return header;
+}
 
 const featureBody = z.object({
   id: z.uuidv7(),
@@ -505,6 +560,32 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
     async (request, reply) => {
       await inWorkspace(request, "write", ({ trx }) => deleteFeature(trx, request.params.id));
       return reply.status(204).send(null);
+    },
+  );
+
+  app.post(
+    "/takeoffs/:id/assist",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        body: assistBody,
+        response: { 200: assistResponse },
+      },
+    },
+    async (request) => {
+      const scope = await inWorkspace(request, "write", async ({ workspaceId, member }) => ({
+        workspaceId,
+        memberId: member.id,
+      }));
+      const body: AssistRequest = request.body;
+      return runAssist(ctx.db, {
+        workspaceId: scope.workspaceId,
+        memberId: scope.memberId,
+        takeoffId: request.params.id,
+        body,
+        idempotencyKey: idempotencyKeyFrom(request.headers["idempotency-key"]),
+      });
     },
   );
 
