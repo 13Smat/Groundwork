@@ -164,6 +164,22 @@ Spec 03's examples use `J-1001`. The start value for `E`, `P`, and `INV` was sti
 
 Spec 03 names notes, tasks, and files on a job and does not give columns. ADR 0009 stores a note body, a task title with `done` and `due_at`, and a `job_file` row pointing at `file`. `POST /locations/resolve` is not given a status for an address the geocoder cannot place. This slice returns 200 with `point: null`, an empty parcel list, and a warning. List routes cap at 200 rows. `GET /jobs` defaults to 50 and caps at 200. Paging is not in the spec.
 
+## Takeoff version linkage, holes, acres, and the confirm field
+
+Spec 04 says `final -> draft` creates version n+1 and keeps the old row read-only. The spec 01 sketch has `version` and no column that groups versions or points at the previous row. [ADR 0013](../adr/0013-takeoff-measurements.md) adds `lineage_id` and `supersedes_id`, inserts the new version, and copies measurements onto new ids. A partial unique index allows one `draft` or `in_review` row per lineage. The spec does not say whether two open versions may exist.
+
+The measurement sketch allows a null `takeoff_item_id` and requires exactly one of `geom` and `sheet_geom`. ADR 0013 requires `takeoff_item_id` and stores `geom` only. `sheet_geom` and `planset_sheet` wait for spec 12. A planset takeoff may omit imagery and a location. An aerial takeoff requires both.
+
+The entity table names deductions and the SQL sketch has no column. ADR 0013 stores them as a jsonb array of polygons, cuts those polygons out with `ST_Difference` before `ST_MakeValid`, and rewrites the array from the interior rings of the stored geometry.
+
+`value_m = ST_Length(geom::geography)` is the perimeter when the geometry is an area. The summary adds `value_m` for length items only, so an area perimeter is not a length total. The spec does not say that split.
+
+Overlaps of the same item are flagged. The spec does not give a minimum area. ADR 0013 flags an intersection above 0.01 m² and ignores a shared edge.
+
+Display rounding names ft², yd², and ft. Acres are in the builder rules and have no step in spec 04. ADR 0013 rounds acres to 0.001.
+
+`PATCH /takeoffs/:id` requires confirm before changing the capture on a takeoff that already has measurements. The spec does not name the field. The body uses `confirm: true`. JSON is snake_case (`location_id`, `imagery_capture_id`), matching the routes from ADR 0007. The spec table writes `locationId` and `imageryCaptureId`. The spec files were not edited.
+
 ## Activity list and file download URL
 
 Spec 03's job page includes an Activity tab and Files/Photos. The API table does not name a read for `audit_log` or a way for the browser to GET a stored object. This UI reads `GET /jobs/:id/activity` (actor, action, `at`, and the stage diff already written by ADR 0009) and adds `download_url` on the file payload, signed the same way as the upload URL. The presign lifetime is still the open question above. The spec files were not edited.

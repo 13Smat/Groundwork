@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0011.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0014. 0011 is reserved for the parallel catalog UI slice. The CRM UI shipped without a new ADR.
 
 | ADR | Title |
 | --- | --- |
@@ -15,3 +15,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0008](0008-imagery-ingest.md) | Imagery ingest worker |
 | [0009](0009-crm-jobs.md) | CRM tables, job numbers, and fixture geocoding |
 | [0010](0010-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |
+| [0013](0013-takeoff-measurements.md) | Takeoff measurements and geodesic quantities |

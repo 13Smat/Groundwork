@@ -60,3 +60,11 @@ export {
   transitionRecipe,
   type RecipeStatus,
 } from "./state/recipe.js";
+export {
+  IllegalTakeoffTransitionError,
+  isTakeoffStatus,
+  TAKEOFF_STATUSES,
+  transitionTakeoff,
+  type TakeoffStatus,
+  type TakeoffTransition,
+} from "./state/takeoff.js";

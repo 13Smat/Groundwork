@@ -315,4 +315,37 @@ export interface Database {
     created_at: Generated<Date>;
     created_by: string | null;
   };
+  takeoff: {
+    id: string;
+    workspace_id: string;
+    job_id: string;
+    location_id: string | null;
+    lineage_id: string;
+    supersedes_id: string | null;
+    kind: string;
+    imagery_capture_id: string | null;
+    status: string;
+    version: number;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
+  measurement: {
+    id: string;
+    workspace_id: string;
+    takeoff_id: string;
+    takeoff_item_id: string;
+    kind: string;
+    geom: unknown;
+    value_m2: string | null;
+    value_m: string | null;
+    count: number | null;
+    source: string;
+    confidence: number | null;
+    label: string | null;
+    deductions: ColumnType<unknown, unknown, unknown>;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+    created_by: string | null;
+  };
 }

@@ -22,6 +22,8 @@ const TENANT_TABLES = [
   "job_note",
   "job_task",
   "job_file",
+  "takeoff",
+  "measurement",
 ] as const;
 const AUTH_TABLES = [
   "app_user",
@@ -681,7 +683,10 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     job_note: { a: createId(), b: createId() },
     job_task: { a: createId(), b: createId() },
     job_file: { a: createId(), b: createId() },
+    takeoff: { a: createId(), b: createId() },
+    measurement: { a: createId(), b: createId() },
   };
+  const takeoffItem = { a: createId(), b: createId() };
   const pool = requireAdmin();
   await pool.query(
     `insert into counters (id, workspace_id, prefix, last_value)
@@ -759,6 +764,51 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
       workspaceB,
       ids.job.b,
       ids.file.b,
+    ],
+  );
+  await pool.query(
+    `insert into takeoff_item (id, workspace_id, name, measure_kind, default_unit)
+     values ($1, $2, 'A', 'area', 'ft2'), ($3, $4, 'B', 'area', 'ft2')`,
+    [takeoffItem.a, workspaceA, takeoffItem.b, workspaceB],
+  );
+  await pool.query(
+    `insert into takeoff (
+       id, workspace_id, job_id, location_id, lineage_id, kind, status, version
+     ) values
+       ($1, $2, $3, $4, $1, 'planset', 'draft', 1),
+       ($5, $6, $7, $8, $5, 'planset', 'draft', 1)`,
+    [
+      ids.takeoff.a,
+      workspaceA,
+      ids.job.a,
+      ids.location.a,
+      ids.takeoff.b,
+      workspaceB,
+      ids.job.b,
+      ids.location.b,
+    ],
+  );
+  await pool.query(
+    `insert into measurement (
+       id, workspace_id, takeoff_id, takeoff_item_id, kind, geom, value_m2, source
+     ) values
+       ($1, $2, $3, $4, 'area',
+        ST_SetSRID(ST_GeomFromText('POLYGON((0 0, 0.001 0, 0.001 0.001, 0 0.001, 0 0))'), 4326),
+        ST_Area(ST_SetSRID(ST_GeomFromText('POLYGON((0 0, 0.001 0, 0.001 0.001, 0 0.001, 0 0))'), 4326)::geography)::numeric(14, 4),
+        'manual'),
+       ($5, $6, $7, $8, 'area',
+        ST_SetSRID(ST_GeomFromText('POLYGON((1 1, 1.001 1, 1.001 1.001, 1 1.001, 1 1))'), 4326),
+        ST_Area(ST_SetSRID(ST_GeomFromText('POLYGON((1 1, 1.001 1, 1.001 1.001, 1 1.001, 1 1))'), 4326)::geography)::numeric(14, 4),
+        'manual')`,
+    [
+      ids.measurement.a,
+      workspaceA,
+      ids.takeoff.a,
+      takeoffItem.a,
+      ids.measurement.b,
+      workspaceB,
+      ids.takeoff.b,
+      takeoffItem.b,
     ],
   );
   return ids;
@@ -888,6 +938,48 @@ describe("catalog row level security", () => {
       await admin.query("delete from takeoff_item where id = any($1::uuid[])", [
         [takeoffA, takeoffB],
       ]);
+    }
+  });
+});
+
+describe("takeoff row level security", () => {
+  it("isolates takeoff and measurement rows and does not grant them to groundwork_auth", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const ids = await insertFixtures(workspaceA, workspaceB);
+    const app = await requireApp().connect();
+    const auth = createPool(readAuthDatabaseUrl());
+    try {
+      const unset = await app.query<{ n: number }>("select count(*)::int as n from takeoff");
+      expect(unset.rows[0]?.n).toBe(0);
+
+      await app.query("begin");
+      await app.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const takeoffs = await app.query<{ id: string }>(
+        "select id::text as id from takeoff where id = any($1::uuid[]) order by id",
+        [[ids.takeoff.a, ids.takeoff.b]],
+      );
+      const measurements = await app.query<{ id: string }>(
+        "select id::text as id from measurement where id = any($1::uuid[]) order by id",
+        [[ids.measurement.a, ids.measurement.b]],
+      );
+      await expect(
+        app.query(
+          `insert into takeoff (
+             id, workspace_id, job_id, location_id, lineage_id, kind, status, version
+           ) values ($1, $2, $3, $4, $1, 'planset', 'draft', 1)`,
+          [createId(), workspaceB, ids.job.b, ids.location.b],
+        ),
+      ).rejects.toThrow(/row-level security|new row violates/i);
+      await app.query("rollback");
+
+      expect(takeoffs.rows.map((row) => row.id)).toEqual([ids.takeoff.a]);
+      expect(measurements.rows.map((row) => row.id)).toEqual([ids.measurement.a]);
+      await expect(auth.query("select id from takeoff")).rejects.toThrow(/permission denied/i);
+      await expect(auth.query("select id from measurement")).rejects.toThrow(/permission denied/i);
+    } finally {
+      app.release();
+      await auth.end();
     }
   });
 });

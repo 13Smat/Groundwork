@@ -18,6 +18,7 @@ export default defineConfig({
       "apps/api/test/imagery.integration.test.ts",
       "apps/api/test/imagery-ingest.integration.test.ts",
       "apps/api/test/crm.integration.test.ts",
+      "apps/api/test/takeoff.integration.test.ts",
     ],
   },
 });
