@@ -28,6 +28,12 @@ export const AUTH_ROLE = "groundwork_auth";
  * A generated secret belongs in an untracked .env. ADR 0002 and ADR 0007.
  */
 export const LOCAL_BETTER_AUTH_SECRET = "local-dev-only-better-auth-secret-not-for-production";
+
+/**
+ * Laptop default for FakeEsignProvider webhook HMAC. It is not a Dropbox Sign
+ * key. NODE_ENV=production refuses it. ADR 0021.
+ */
+export const LOCAL_ESIGN_WEBHOOK_SECRET = "local-esign-webhook-secret";
 export const LOCAL_BETTER_AUTH_URL = "http://127.0.0.1:5173";
 export const LOCAL_WEB_ORIGIN = "http://127.0.0.1:5173";
 
@@ -237,6 +243,36 @@ export function readCvServiceUrl(): URL {
     throw new Error(`CV_SERVICE_URL host is not allowed. Received ${url.hostname}.`);
   }
   return url;
+}
+
+/**
+ * HMAC key for FakeEsignProvider webhooks. Dropbox Sign uses its API key
+ * instead. Empty outside production uses the local default. Production refuses
+ * a missing value and refuses the local default.
+ */
+export function readEsignWebhookSecret(): string {
+  const value = readOptional("ESIGN_WEBHOOK_SECRET");
+  if (!value) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ESIGN_WEBHOOK_SECRET is required when NODE_ENV is production.");
+    }
+    return LOCAL_ESIGN_WEBHOOK_SECRET;
+  }
+  if (process.env.NODE_ENV === "production" && value === LOCAL_ESIGN_WEBHOOK_SECRET) {
+    throw new Error(
+      "ESIGN_WEBHOOK_SECRET must not be the local default when NODE_ENV is production.",
+    );
+  }
+  return value;
+}
+
+/** Set only when a Dropbox Sign adapter should be constructed. Empty stays on the fake. */
+export function readDropboxSignConfig(): { apiKey: string; live: boolean } | undefined {
+  const apiKey = readOptional("DROPBOX_SIGN_API_KEY");
+  if (!apiKey) {
+    return undefined;
+  }
+  return { apiKey, live: process.env.DROPBOX_SIGN_LIVE === "1" };
 }
 
 /** Hide a database password before it reaches a log line. */

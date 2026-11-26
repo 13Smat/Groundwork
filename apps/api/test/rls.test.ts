@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { createId } from "@groundwork/shared";
 import type { Kysely } from "kysely";
 import type pg from "pg";
@@ -31,6 +33,7 @@ const TENANT_TABLES = [
   "proposal_template",
   "proposal",
   "signature",
+  "work_order",
 ] as const;
 const AUTH_TABLES = [
   "app_user",
@@ -724,7 +727,17 @@ describe("imagery row level security", () => {
       "select prosecdef from pg_proc where proname = 'proposal_pin_estimate'",
     );
     expect(pin.rows[0]?.prosecdef).toBe(false);
-    for (const table of ["proposal_template", "proposal", "signature"]) {
+    const workOrderFn = await requireAdmin().query<{ prosecdef: boolean }>(
+      "select prosecdef from pg_proc where proname = 'work_order_before_update'",
+    );
+    expect(workOrderFn.rows[0]?.prosecdef).toBe(false);
+    for (const table of [
+      "proposal_template",
+      "proposal",
+      "signature",
+      "work_order",
+      "proposal_token",
+    ]) {
       const priv = await requireAdmin().query<{ app: boolean; auth: boolean }>(
         `select has_table_privilege('groundwork_app', $1, 'select') as app,
                 has_table_privilege('groundwork_auth', $1, 'select') as auth`,
@@ -757,9 +770,109 @@ describe("imagery row level security", () => {
          ) values ($1, $2, $3, 'P-9', repeat('ef', 32), 1, '{"lines":[]}'::jsonb)`,
         [proposal, workspace, estimate],
       );
+      await client.query("savepoint illegal_status");
       await expect(
         client.query("update proposal set status = 'signed' where id = $1", [proposal]),
       ).rejects.toThrow(/illegal proposal transition from draft to signed/);
+      await client.query("rollback to savepoint illegal_status");
+      const file = createId();
+      await client.query(
+        `insert into file (id, workspace_id, storage_key, status)
+         values ($1, $2, $3, 'ready')`,
+        [file, workspace, `rendered/${file}`],
+      );
+      await client.query(
+        "update proposal set status = 'rendered', pdf_file_id = $2 where id = $1",
+        [proposal, file],
+      );
+      await client.query(
+        "update proposal set selected_optional_line_ids = array[$2]::uuid[] where id = $1",
+        [proposal, createId()],
+      );
+      await client.query("savepoint illegal_intro");
+      await expect(
+        client.query("update proposal set intro = 'changed' where id = $1", [proposal]),
+      ).rejects.toThrow(/only a draft proposal can be edited/);
+      await client.query("rollback to savepoint illegal_intro");
+      const order = createId();
+      await client.query(
+        `insert into work_order (id, workspace_id, job_id, estimate_id, proposal_id, title)
+         values ($1, $2, $3, $4, $5, 'Ready')`,
+        [order, workspace, job, estimate, proposal],
+      );
+      await expect(
+        client.query("update work_order set status = 'done' where id = $1", [order]),
+      ).rejects.toThrow(/illegal work order transition from ready to done/);
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+  });
+
+  it("resolves one proposal token by hash and hides the other workspace", async () => {
+    const workspaceA = createId();
+    const workspaceB = createId();
+    const jobA = createId();
+    const jobB = createId();
+    const estimateA = createId();
+    const estimateB = createId();
+    const proposalA = createId();
+    const proposalB = createId();
+    const hashA = createHash("sha256").update(proposalA).digest("hex");
+    const hashB = createHash("sha256").update(proposalB).digest("hex");
+    const pool = requireAdmin();
+    await pool.query(
+      `insert into job (id, workspace_id, number, name, stage)
+       values ($1, $2, 'J-21', 'A', 'lead'), ($3, $4, 'J-21', 'B', 'lead')`,
+      [jobA, workspaceA, jobB, workspaceB],
+    );
+    await pool.query(
+      `insert into estimate (id, workspace_id, job_id, number, status)
+       values ($1, $2, $3, 'E-21', 'draft'), ($4, $5, $6, 'E-21', 'draft')`,
+      [estimateA, workspaceA, jobA, estimateB, workspaceB, jobB],
+    );
+    await pool.query(
+      `insert into proposal (
+         id, workspace_id, estimate_id, number, public_token_hash, estimate_version, snapshot
+       ) values
+         ($1, $2, $3, 'P-21', $4, 1, '{"lines":[]}'::jsonb),
+         ($5, $6, $7, 'P-21', $8, 1, '{"lines":[]}'::jsonb)`,
+      [proposalA, workspaceA, estimateA, hashA, proposalB, workspaceB, estimateB, hashB],
+    );
+    await pool.query(
+      `insert into proposal_token (token_hash, workspace_id, proposal_id)
+       values ($1, $2, $3), ($4, $5, $6)`,
+      [hashA, workspaceA, proposalA, hashB, workspaceB, proposalB],
+    );
+    const client = await requireApp().connect();
+    try {
+      await client.query("begin");
+      await client.query("select set_config('app.proposal_token_hash', $1, true)", [hashA]);
+      const byHash = await client.query<{ token_hash: string }>(
+        "select token_hash from proposal_token where token_hash = any($1::text[])",
+        [[hashA, hashB]],
+      );
+      expect(byHash.rows.map((row) => row.token_hash)).toEqual([hashA]);
+      await client.query("rollback");
+
+      await client.query("begin");
+      await client.query("select set_config('app.proposal_token_hash', $1, true)", [
+        "33".repeat(32),
+      ]);
+      const missing = await client.query(
+        "select token_hash from proposal_token where token_hash = any($1::text[])",
+        [[hashA, hashB]],
+      );
+      expect(missing.rows).toHaveLength(0);
+      await client.query("rollback");
+
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      const own = await client.query<{ token_hash: string }>(
+        "select token_hash from proposal_token where token_hash = any($1::text[]) order by token_hash",
+        [[hashA, hashB]],
+      );
+      expect(own.rows.map((row) => row.token_hash)).toEqual([hashA]);
       await client.query("rollback");
     } finally {
       client.release();
@@ -813,6 +926,7 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
     proposal_template: { a: createId(), b: createId() },
     proposal: { a: createId(), b: createId() },
     signature: { a: createId(), b: createId() },
+    work_order: { a: createId(), b: createId() },
   };
   const takeoffItem = { a: createId(), b: createId() };
   const pool = requireAdmin();
@@ -1000,28 +1114,48 @@ async function insertFixtures(workspaceA: string, workspaceB: string): Promise<F
      values ($1, $2, 'A'), ($3, $4, 'B')`,
     [ids.proposal_template.a, workspaceA, ids.proposal_template.b, workspaceB],
   );
+  const proposalHashA = createHash("sha256").update(ids.proposal.a).digest("hex");
+  const proposalHashB = createHash("sha256").update(ids.proposal.b).digest("hex");
   await pool.query(
     `insert into proposal (
        id, workspace_id, estimate_id, template_id, number, public_token_hash,
        estimate_version, snapshot
      ) values
-       ($1, $2, $3, $4, 'P-1', repeat('ab', 32), 1, '{"lines":[]}'::jsonb),
-       ($5, $6, $7, $8, 'P-1', repeat('cd', 32), 1, '{"lines":[]}'::jsonb)`,
+       ($1, $2, $3, $4, 'P-1', $5, 1, '{"lines":[]}'::jsonb),
+       ($6, $7, $8, $9, 'P-1', $10, 1, '{"lines":[]}'::jsonb)`,
     [
       ids.proposal.a,
       workspaceA,
       ids.estimate.a,
       ids.proposal_template.a,
+      proposalHashA,
       ids.proposal.b,
       workspaceB,
       ids.estimate.b,
       ids.proposal_template.b,
+      proposalHashB,
     ],
   );
   await pool.query(
     `insert into signature (id, workspace_id, proposal_id, signer_name)
      values ($1, $2, $3, 'A'), ($4, $5, $6, 'B')`,
     [ids.signature.a, workspaceA, ids.proposal.a, ids.signature.b, workspaceB, ids.proposal.b],
+  );
+  await pool.query(
+    `insert into work_order (id, workspace_id, job_id, estimate_id, proposal_id, title)
+     values ($1, $2, $3, $4, $5, 'A'), ($6, $7, $8, $9, $10, 'B')`,
+    [
+      ids.work_order.a,
+      workspaceA,
+      ids.job.a,
+      ids.estimate.a,
+      ids.proposal.a,
+      ids.work_order.b,
+      workspaceB,
+      ids.job.b,
+      ids.estimate.b,
+      ids.proposal.b,
+    ],
   );
   return ids;
 }

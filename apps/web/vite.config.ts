@@ -50,6 +50,8 @@ export default defineConfig({
       "/jobs": proxy,
       "/estimates": proxy,
       "/proposals": proxy,
+      "/public": proxy,
+      "/webhooks": proxy,
       "/proposal-templates": proxy,
       "/line-items": proxy,
       "/takeoffs": proxy,

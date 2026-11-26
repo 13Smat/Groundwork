@@ -91,3 +91,10 @@ export {
   transitionProposal,
   type ProposalStatus,
 } from "./state/proposal.js";
+export {
+  IllegalWorkOrderTransitionError,
+  WORK_ORDER_STATUSES,
+  isWorkOrderStatus,
+  transitionWorkOrder,
+  type WorkOrderStatus,
+} from "./state/work-order.js";

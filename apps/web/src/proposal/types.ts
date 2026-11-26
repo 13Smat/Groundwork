@@ -32,6 +32,15 @@ export type Proposal = {
   tax_cents: number;
   total_cents: number;
   lines: ProposalLine[];
+  bounced: boolean;
+  recipients: { name: string; email: string }[];
+  signatures: {
+    signer_name: string | null;
+    signer_email: string | null;
+    signed_at: string | null;
+  }[];
+  work_order_id: string | null;
+  estimate_status: string;
   created_at: string;
   updated_at: string;
 };

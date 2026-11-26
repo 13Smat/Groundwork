@@ -40,6 +40,7 @@ import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
 import { EstimateEditorPage } from "./estimate/editor-page";
 import { JobEstimates } from "./estimate/job-estimates";
 import { JobProposals } from "./proposal/job-proposals";
+import { PublicProposalPage } from "./proposal/public-page";
 import { ProposalStartPage } from "./proposal/start-page";
 import { ProposalTemplatesPage } from "./proposal/templates-page";
 import { TakeoffsPage } from "./takeoff/start";
@@ -109,6 +110,9 @@ function titleFor(pathname: string): string {
     return "Proposals";
   }
   if (/^\/proposals\/[^/]+$/.test(pathname)) {
+    return "Proposal";
+  }
+  if (/^\/p\/[^/]+$/.test(pathname)) {
     return "Proposal";
   }
   if (/^\/jobs\/[^/]+\/estimates$/.test(pathname)) {
@@ -486,9 +490,19 @@ const acceptRoute = createRoute({
   },
 });
 
+const publicProposalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/p/$token",
+  component: function PublicProposalRoute() {
+    const { token } = publicProposalRoute.useParams();
+    return <PublicProposalPage token={token} />;
+  },
+});
+
 const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
+  publicProposalRoute,
   authedRoute.addChildren([
     indexRoute,
     pipelineRoute,

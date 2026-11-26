@@ -91,6 +91,44 @@ export function withWorkspaceContext<T>(
 }
 
 /**
+ * A transaction on the app role with no tenant setting yet. Public and webhook
+ * code sets `app.workspace_id` only after it has resolved a token or checked a
+ * provider signature. ADR 0021.
+ */
+export async function withTenantTransaction<T>(
+  db: Kysely<Database>,
+  fn: (trx: Transaction<Database>) => Promise<T>,
+): Promise<T> {
+  return db.transaction().execute(async (trx) => {
+    await assertTenantRole(trx);
+    return fn(trx);
+  });
+}
+
+export async function setWorkspaceId(
+  trx: Transaction<Database>,
+  workspaceId: string,
+): Promise<void> {
+  requireUuidV7(workspaceId, "Workspace id");
+  await sql`select set_config('app.workspace_id', ${workspaceId}, true)`.execute(trx);
+}
+
+/** Capability for the public proposal lookup. The value is a SHA-256 hex digest. */
+export async function setProposalTokenHash(
+  trx: Transaction<Database>,
+  tokenHash: string,
+): Promise<void> {
+  if (!/^[0-9a-f]{64}$/.test(tokenHash)) {
+    throw new ProblemError({
+      status: 400,
+      title: "Bad Request",
+      detail: "The proposal token hash is invalid.",
+    });
+  }
+  await sql`select set_config('app.proposal_token_hash', ${tokenHash}, true)`.execute(trx);
+}
+
+/**
  * Same tenant connection as `withWorkspaceContext`, plus `app.imagery_admin=on`
  * for this transaction only. Call it only after `requireImageryAdmin`. The
  * setting is what lets the app role write a global imagery row. ADR 0008.

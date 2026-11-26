@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-26).
+Accepted (2026-11-26). The interface name is `EsignProvider`. See ADR 0021.
 
 ## Context
 

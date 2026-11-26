@@ -111,6 +111,9 @@ const TENANT_ROUTES = [
   "get /proposal-templates",
   "post /proposal-templates",
   "patch /proposal-templates/{id}",
+  "post /proposals/{id}/link",
+  "post /proposals/{id}/send",
+  "post /proposals/{id}/void",
 ];
 
 type Session = { cookie: string; email: string };
@@ -363,6 +366,12 @@ function tenantPayload(
       return { name: "Nope" };
     case "patch /proposal-templates/{id}":
       return { name: "Nope" };
+    case "post /proposals/{id}/link":
+      return {};
+    case "post /proposals/{id}/send":
+      return { recipients: [{ name: "Nope", email: "nope@example.com" }] };
+    case "post /proposals/{id}/void":
+      return {};
     case "post /imagery/ingest":
       return { sourceId: createId(), year: 2026, countyFips: "37023" };
     case "post /admin/imagery-sources":
