@@ -1329,7 +1329,7 @@ export async function registerCatalogRoutes(app: ApiApp, ctx: CatalogContext): P
     "/cost-recipes/:id",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: z.object({ id: z.string() }),
         body: recipeBody.partial(),
         response: { 200: recipeSchema },
@@ -1460,7 +1460,7 @@ export async function registerCatalogRoutes(app: ApiApp, ctx: CatalogContext): P
     "/cost-recipes/:id/versions",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: z.object({ id: z.string() }),
         body: z.object({}),
         response: { 201: recipeSchema },

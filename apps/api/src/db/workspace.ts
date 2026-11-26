@@ -131,7 +131,8 @@ export async function setProposalTokenHash(
 /**
  * Same tenant connection as `withWorkspaceContext`, plus `app.imagery_admin=on`
  * for this transaction only. Call it only after `requireImageryAdmin`. The
- * setting is what lets the app role write a global imagery row. ADR 0008.
+ * setting lets that role write imagery rows for this workspace. It does not
+ * grant a write to a global row. ADR 0008 and ADR 0023.
  */
 export function withImageryAdminContext<T>(
   db: Kysely<Database>,

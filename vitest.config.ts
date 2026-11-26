@@ -25,6 +25,9 @@ export default defineConfig({
       "apps/api/test/esign.integration.test.ts",
       "apps/api/test/assist.integration.test.ts",
       "apps/api/test/seed.integration.test.ts",
+      "apps/api/test/schema-audit.test.ts",
+      "apps/api/test/tenant-isolation.integration.test.ts",
+      "apps/api/test/problem-contract.integration.test.ts",
     ],
   },
 });

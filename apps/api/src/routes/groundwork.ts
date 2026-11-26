@@ -286,6 +286,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
     "/me",
     {
       schema: {
+        tags: ["session"],
         response: {
           200: z.object({
             user: z.object({
@@ -376,6 +377,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
     "/roles",
     {
       schema: {
+        tags: ["session"],
         response: {
           200: z.object({
             roles: z.array(
@@ -410,6 +412,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
     "/workspaces",
     {
       schema: {
+        tags: ["session"],
         body: z.object({
           name: workspaceBody.name,
           timezone: workspaceBody.timezone,
@@ -881,6 +884,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
     "/invites/:token/accept",
     {
       schema: {
+        tags: ["session"],
         params: z.object({ token: z.string() }),
         response: {
           200: z.object({
@@ -964,7 +968,7 @@ export async function registerGroundworkRoutes(app: ApiApp, ctx: GroundworkConte
     "/members/:id",
     {
       schema: {
-        tags: ["tenant-member"],
+        tags: ["tenant-member", "state-machine"],
         params: z.object({ id: z.string() }),
         body: z.object({
           roleId: z.string().optional(),

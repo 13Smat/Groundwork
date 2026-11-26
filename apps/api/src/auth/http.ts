@@ -19,6 +19,9 @@ export function registerAuthHandler(app: FastifyInstance, auth: Auth): void {
   app.route({
     method: ["GET", "POST"],
     url: "/auth/*",
+    schema: {
+      tags: ["session"],
+    },
     handler: async (request, reply) => {
       try {
         const url = new URL(request.url, `http://${headerValue(request.headers.host)}`);

@@ -4,5 +4,6 @@ coverage
 .turbo
 node_modules
 *.md
+apps/api/openapi.json
 .venv-imagery
 .venv-cv

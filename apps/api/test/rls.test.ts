@@ -640,23 +640,49 @@ describe("imagery row level security", () => {
     expect(stillBlocked.rows[0]?.allows_tracing).toBe(false);
   });
 
-  it("lets the app role write a global source only while imagery admin is on", async () => {
+  it("does not let imagery admin write a global source or capture", async () => {
     const workspaceA = createId();
     const client = await requireApp().connect();
     try {
       await client.query("begin");
       await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
-      const denied = await client.query(
-        "update imagery_source set notes = 'denied' where name = 'naip'",
-      );
-      expect(denied.rowCount).toBe(0);
       await client.query("select set_config('app.imagery_admin', 'on', true)");
-      const allowed = await client.query(
+      const visible = await client.query<{ name: string }>(
+        "select name from imagery_source where name = 'naip'",
+      );
+      expect(visible.rows.map((row) => row.name)).toEqual(["naip"]);
+      const updated = await client.query(
         "update imagery_source set notes = 'admin-probe' where name = 'naip'",
       );
-      expect(allowed.rowCount).toBe(1);
+      expect(updated.rowCount).toBe(0);
+      await expect(
+        client.query(
+          `insert into imagery_source (id, workspace_id, provider, name, bands, allows_tracing, allows_ml_training)
+           values ($1, null, 'other', $2, 'RGB', false, false)`,
+          [createId(), `global-${createId()}`],
+        ),
+      ).rejects.toThrow(/row-level security/i);
+      await client.query("rollback");
+
+      await client.query("begin");
+      await client.query("select set_config('app.workspace_id', $1, true)", [workspaceA]);
+      await client.query("select set_config('app.imagery_admin', 'on', true)");
+      await expect(
+        client.query(
+          `insert into imagery_capture (
+             id, workspace_id, source_id, coverage, capture_date, gsd_cm, bands, leaf, status
+           )
+           select $1, null, id,
+                  ST_SetSRID(ST_GeomFromText('MULTIPOLYGON(((0 0, 0.001 0, 0.001 0.001, 0 0.001, 0 0)))'), 4326),
+                  '2024-01-01', 10, 'RGB', 'unknown', 'failed'
+           from imagery_source
+           where name = 'naip'`,
+          [createId()],
+        ),
+      ).rejects.toThrow(/row-level security/i);
       await client.query("rollback");
     } finally {
+      await client.query("rollback").catch(() => undefined);
       client.release();
     }
     const notes = await requireAdmin().query<{ notes: string | null }>(

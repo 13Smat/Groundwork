@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["apps/api/test/rls.test.ts"],
+    include: ["apps/api/test/rls.test.ts", "apps/api/test/schema-audit.test.ts"],
     fileParallelism: false,
     sequence: { concurrent: false },
     testTimeout: 30_000,

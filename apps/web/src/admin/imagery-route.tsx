@@ -129,6 +129,7 @@ function toRow(source: SourceResponse): ImagerySourceRow {
     verifiedAt: source.verifiedAt,
     licenseText: source.licenseText,
     attribution: source.attribution,
+    workspaceId: source.workspaceId,
     coverage: source.coverage,
   };
 }

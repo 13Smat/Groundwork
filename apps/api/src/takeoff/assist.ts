@@ -592,6 +592,9 @@ export async function runAssist(
     idempotencyKey: string;
   },
 ): Promise<AssistResult> {
+  await withWorkspaceContext(db, input.workspaceId, async (trx) => {
+    await getTakeoff(trx, input.takeoffId);
+  });
   if (!aiAssistEnabled()) {
     throw new ProblemError({
       status: 403,

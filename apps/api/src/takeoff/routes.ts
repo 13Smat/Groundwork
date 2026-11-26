@@ -510,7 +510,7 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
     "/takeoffs/:id",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: idParams,
         body: z.object({
           status: z.enum(["draft", "in_review", "final"]).optional(),
@@ -689,7 +689,7 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
     "/detections/:id/accept",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: idParams,
         body: reviewSelection,
         response: { 200: reviewResultSchema },
@@ -720,7 +720,7 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
     "/detections/:id/reject",
     {
       schema: {
-        tags: [...TENANT],
+        tags: [...TENANT, "state-machine"],
         params: idParams,
         body: reviewSelection,
         response: { 200: reviewResultSchema },

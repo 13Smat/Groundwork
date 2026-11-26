@@ -426,10 +426,10 @@ export async function getDetectionRun(
   db: Db,
   input: { workspaceId: string; runId: string },
 ): Promise<DetectionRunView> {
-  assertAssistEnv();
   return withWorkspaceContext(db, input.workspaceId, async (trx) => {
-    await assertWorkspaceFlag(trx, input.workspaceId);
     const run = await loadRun(trx, input.runId);
+    assertAssistEnv();
+    await assertWorkspaceFlag(trx, input.workspaceId);
     const drafts = await loadDrafts(trx, input.runId);
     const overlaps = await loadOverlaps(trx, input.runId, run.takeoff_id);
     return {
@@ -446,10 +446,10 @@ export async function acceptDetectionRun(
   db: Db,
   input: { workspaceId: string; memberId: string; runId: string; selection: ReviewSelection },
 ): Promise<ReviewResult> {
-  assertAssistEnv();
   return withWorkspaceContext(db, input.workspaceId, async (trx) => {
-    await assertWorkspaceFlag(trx, input.workspaceId);
     const run = await loadRun(trx, input.runId);
+    assertAssistEnv();
+    await assertWorkspaceFlag(trx, input.workspaceId);
     const status = run.status as DetectionRunStatus;
     requireSucceeded(status);
     const drafts = await loadDrafts(trx, input.runId);
@@ -472,13 +472,13 @@ export async function rejectDetectionRun(
   db: Db,
   input: { workspaceId: string; memberId: string; runId: string; selection: ReviewSelection },
 ): Promise<ReviewResult> {
-  assertAssistEnv();
   if (input.selection.all !== true || input.selection.feature_ids !== undefined) {
     throw badRequest("Reject the whole run with all: true.");
   }
   return withWorkspaceContext(db, input.workspaceId, async (trx) => {
-    await assertWorkspaceFlag(trx, input.workspaceId);
     const run = await loadRun(trx, input.runId);
+    assertAssistEnv();
+    await assertWorkspaceFlag(trx, input.workspaceId);
     const status = run.status as DetectionRunStatus;
     requireSucceeded(status);
     try {
