@@ -374,4 +374,72 @@ describe("catalog and cost recipes", () => {
     const tackRow = listed.json().items.find((item: { sku: string }) => item.sku === "TACK");
     expect(tackRow.unit_cost_cents).toBe(460);
   });
+
+  it("loads the starter pack once and leaves the second load unchanged", async () => {
+    const owner = await signUp("Starter Owner");
+    const workspaceId = await createWorkspace(owner.cookie, "Starter Co");
+    const office = await signUp("Starter Office");
+    const roles = await requireApp().inject({
+      method: "GET",
+      url: "/roles",
+      headers: { ...BROWSER, cookie: owner.cookie },
+    });
+    const officeRole = roles.json().roles.find((role: { name: string }) => role.name === "office");
+    const invite = await requireApp().inject({
+      method: "POST",
+      url: `/workspaces/${workspaceId}/invites`,
+      headers: headers(owner.cookie, workspaceId),
+      payload: { email: office.email, roleId: officeRole.id },
+    });
+    expect(invite.statusCode, invite.body).toBe(201);
+    const accepted = await requireApp().inject({
+      method: "POST",
+      url: `/invites/${invite.json().id}/accept`,
+      headers: { ...BROWSER, cookie: office.cookie },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(200);
+
+    const denied = await requireApp().inject({
+      method: "POST",
+      url: "/catalog-items/starter-pack",
+      headers: headers(office.cookie, workspaceId),
+      payload: {},
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const first = await requireApp().inject({
+      method: "POST",
+      url: "/catalog-items/starter-pack",
+      headers: headers(owner.cookie, workspaceId),
+      payload: {},
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json().catalog_created).toContain("GW-MAT-HMA");
+    expect(first.json().takeoff_created).toContain("Asphalt surface");
+    expect(first.json().recipes_created).toContain("Asphalt surface");
+
+    const second = await requireApp().inject({
+      method: "POST",
+      url: "/catalog-items/starter-pack",
+      headers: headers(owner.cookie, workspaceId),
+      payload: {},
+    });
+    expect(second.statusCode, second.body).toBe(200);
+    expect(second.json().catalog_created).toEqual([]);
+    expect(second.json().takeoff_created).toEqual([]);
+    expect(second.json().recipes_created).toEqual([]);
+    expect(second.json().catalog_skipped).toContain("GW-MAT-HMA");
+    expect(second.json().recipes_skipped).toContain("Asphalt surface");
+
+    const recipes = await requireApp().inject({
+      method: "GET",
+      url: "/cost-recipes",
+      headers: headers(owner.cookie, workspaceId),
+    });
+    const surface = recipes
+      .json()
+      .recipes.find((recipe: { name: string }) => recipe.name === "Asphalt surface");
+    expect(surface.status).toBe("draft");
+    expect(surface.version).toBe(1);
+  });
 });

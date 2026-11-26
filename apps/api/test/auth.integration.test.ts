@@ -28,6 +28,7 @@ const TENANT_ROUTES = [
   "delete /catalog-items/{id}",
   "post /catalog-items/import",
   "get /catalog-items/export",
+  "post /catalog-items/starter-pack",
   "get /takeoff-items",
   "post /takeoff-items",
   "patch /takeoff-items/{id}",
@@ -209,6 +210,8 @@ function tenantPayload(
         csv: "sku,kind,name,unit,unit_cost_cents,unit_price_cents,waste_pct,vendor,tax_code\n",
         apply: false,
       };
+    case "post /catalog-items/starter-pack":
+      return {};
     case "post /takeoff-items":
       return { name: "Nope", measure_kind: "area", default_unit: "ft2" };
     case "patch /takeoff-items/{id}":

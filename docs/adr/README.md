@@ -1,6 +1,6 @@
 # Decision records
 
-One ADR per decision. Include the alternatives and why they lost. The next number is 0011. CRM is 0009.
+One ADR per decision. Include the alternatives and why they lost. The next number is 0012. CRM is 0009. Catalog starter pack is 0011.
 
 | ADR | Title |
 | --- | --- |
@@ -14,3 +14,4 @@ One ADR per decision. Include the alternatives and why they lost. The next numbe
 | [0007](0007-auth-workspaces.md) | Auth tables, sessions, and workspace membership |
 | [0008](0008-imagery-ingest.md) | Imagery ingest worker |
 | [0010](0010-catalog-recipes.md) | Catalog, cost recipes, and the formula engine |
+| [0011](0011-starter-pack.md) | Clean-room catalog starter pack |
