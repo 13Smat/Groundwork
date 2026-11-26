@@ -48,6 +48,8 @@ export default defineConfig({
       "/contacts": proxy,
       "/locations": proxy,
       "/jobs": proxy,
+      "/takeoffs": proxy,
+      "/measurements": proxy,
       "/search": proxy,
       "/pipeline": proxy,
       "/imagery": proxy,

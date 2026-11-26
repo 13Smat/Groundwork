@@ -749,6 +749,98 @@ describe("takeoff measurements", () => {
     expect(crewRead.statusCode, crewRead.body).toBe(403);
   });
 
+  it("lists the latest version of each lineage, newest first, and hides other tenants", async () => {
+    const job = await createJob();
+    const first = await createTakeoff(job.id, job.location_id);
+    const review = await requireApp().inject({
+      method: "PATCH",
+      url: `/takeoffs/${first.id}`,
+      headers: headers(owner.cookie),
+      payload: { status: "in_review" },
+    });
+    expect(review.statusCode, review.body).toBe(200);
+    const final = await requireApp().inject({
+      method: "PATCH",
+      url: `/takeoffs/${first.id}`,
+      headers: headers(owner.cookie),
+      payload: { status: "final" },
+    });
+    expect(final.statusCode, final.body).toBe(200);
+    const cloned = await requireApp().inject({
+      method: "PATCH",
+      url: `/takeoffs/${first.id}`,
+      headers: headers(owner.cookie),
+      payload: { status: "draft" },
+    });
+    expect(cloned.statusCode, cloned.body).toBe(200);
+    const second = await createTakeoff(job.id, job.location_id, NC_ORTHO);
+
+    const listed = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${job.id}/takeoffs`,
+      headers: headers(owner.cookie),
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    const rows = listed.json().takeoffs as {
+      id: string;
+      status: string;
+      version: number;
+      imagery_capture_id: string;
+      updated_at: string;
+    }[];
+    expect(rows.map((row) => row.id)).toEqual([second.id, cloned.json().id]);
+    expect(rows[0]).toMatchObject({
+      status: "draft",
+      version: 1,
+      imagery_capture_id: NC_ORTHO,
+    });
+    expect(rows[1]).toMatchObject({
+      status: "draft",
+      version: 2,
+      imagery_capture_id: HELENE,
+    });
+    expect(rows[0]?.updated_at).toEqual(expect.any(String));
+    expect(rows[1]?.updated_at).toEqual(expect.any(String));
+    expect(Date.parse(rows[0]?.updated_at ?? "")).toBeGreaterThanOrEqual(
+      Date.parse(rows[1]?.updated_at ?? ""),
+    );
+
+    const other = await signUp("List Other");
+    const otherWorkspace = await createWorkspace(other.cookie, "List Other Co");
+    const hidden = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${job.id}/takeoffs`,
+      headers: headers(other.cookie, otherWorkspace.id),
+    });
+    expect(hidden.statusCode, hidden.body).toBe(404);
+    const otherJob = await requireApp().inject({
+      method: "POST",
+      url: "/jobs",
+      headers: headers(other.cookie, otherWorkspace.id),
+      payload: {
+        name: "Other lot",
+        client: { name: "Bea", type: "residential" },
+        address: "100 Main St, Morganton, NC 28655",
+      },
+    });
+    expect(otherJob.statusCode, otherJob.body).toBe(201);
+    const isolated = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${otherJob.json().id}/takeoffs`,
+      headers: headers(other.cookie, otherWorkspace.id),
+    });
+    expect(isolated.statusCode, isolated.body).toBe(200);
+    expect(isolated.json().takeoffs).toEqual([]);
+
+    const crew = await invite("crew", "List Crew");
+    const crewList = await requireApp().inject({
+      method: "GET",
+      url: `/jobs/${job.id}/takeoffs`,
+      headers: headers(crew.cookie),
+    });
+    expect(crewList.statusCode, crewList.body).toBe(403);
+  });
+
   it("rejects an illegal status update in the database", async () => {
     const job = await createJob();
     const takeoff = await createTakeoff(job.id, job.location_id);

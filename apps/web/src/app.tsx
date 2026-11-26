@@ -1,4 +1,5 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import {
   createRootRoute,
   createRoute,
@@ -36,6 +37,9 @@ import { JobsPage } from "./crm/jobs-page";
 import { LocationPage } from "./crm/location-page";
 import { PipelinePage } from "./crm/pipeline-page";
 import { activeWorkspace, loadMe, queryClient, rememberNext } from "./session";
+import { TakeoffsPage } from "./takeoff/start";
+
+const TakeoffEditorPage = lazy(() => import("./takeoff/editor-page"));
 
 const NAV = [
   { to: "/", label: "Office" },
@@ -88,6 +92,12 @@ function titleFor(pathname: string): string {
   }
   if (pathname === "/jobs/new") {
     return "New job";
+  }
+  if (/^\/jobs\/[^/]+\/takeoffs\/[^/]+$/.test(pathname)) {
+    return "Takeoff editor";
+  }
+  if (/^\/jobs\/[^/]+\/takeoffs$/.test(pathname)) {
+    return "Takeoffs";
   }
   if (pathname.startsWith("/jobs/")) {
     return "Job";
@@ -285,7 +295,29 @@ const locationRoute = createRoute({
 const takeoffRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/takeoff",
-  component: placeholder("No takeoff records are loaded in this slice."),
+  component: placeholder("Open a job and choose Takeoffs to measure on license-cleared imagery."),
+});
+
+const jobTakeoffsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/takeoffs",
+  component: function JobTakeoffsRoute() {
+    const { jobId } = jobTakeoffsRoute.useParams();
+    return <TakeoffsPage jobId={jobId} />;
+  },
+});
+
+const takeoffEditorRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/jobs/$jobId/takeoffs/$takeoffId",
+  component: function TakeoffEditorRoute() {
+    const { jobId, takeoffId } = takeoffEditorRoute.useParams();
+    return (
+      <Suspense fallback={<p>Loading the takeoff editor.</p>}>
+        <TakeoffEditorPage jobId={jobId} takeoffId={takeoffId} />
+      </Suspense>
+    );
+  },
 });
 
 const catalogRoute = createRoute({
@@ -393,6 +425,8 @@ const routeTree = rootRoute.addChildren([
     jobsRoute,
     newJobRoute,
     jobDetailRoute,
+    jobTakeoffsRoute,
+    takeoffEditorRoute,
     clientsRoute,
     clientDetailRoute,
     locationRoute,

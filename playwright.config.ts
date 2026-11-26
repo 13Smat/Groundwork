@@ -15,7 +15,21 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5173",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: "**/takeoff-editor.spec.ts",
+    },
+    {
+      name: "chromium-gl",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 1100 },
+      },
+      testMatch: "**/takeoff-editor.spec.ts",
+    },
+  ],
   webServer: [
     {
       command: "pnpm build:api-deps && pnpm --filter @groundwork/api exec tsx test/e2e-server.ts",

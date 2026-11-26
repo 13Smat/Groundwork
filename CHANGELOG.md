@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Spec 04 part 2 — Takeoff editor
+
+- The job page has a Takeoffs tab. New takeoff creates an aerial takeoff on the first license-cleared capture and opens `/jobs/$jobId/takeoffs/$takeoffId`. The editor is loaded lazily so MapLibre and Terra Draw stay out of the office bundle. `/catalog/takeoff` is still the takeoff-item screen. ADR 0014.
+- The map draws polygon, line, and point measurements and an unsaved ruler. Live area and length use Turf. Save calls `PUT /takeoffs/:id/measurements`, then the quantity summary shows the server sum and union. The parcel outline is a reference and is not a measurement.
+- The imagery picker lists captures from `GET /imagery/captures?locationId=` (Helene, then NC Ortho, then NAIP) with source, date, GSD, leaf, attribution, and the API warnings. Switching after a measurement asks first and sends `confirm: true`. No allowed capture disables New takeoff. Google, Mapbox, and Orthoimagery Latest are not options and are not tile URLs.
+- `GET /jobs/:id/takeoffs` lists the latest version of each lineage, newest first. The Takeoffs tab reads that list. Playwright covers drawing and save, the age warning and attribution, the block when the site has no capture, and the NAIP banner. The spec files were not edited.
+- The map becomes ready from a local style with no glyphs, sprite, or tile request. Imagery is added after `load`. A tile error stays on the page log and does not block drawing. If the map does not start, the page says so.
+
 ### Spec 07 part 1 — Takeoff-to-estimate engine
 
 - Added `0011_estimating.sql` for `estimate` and `line_item`. Tenant row security is forced. `groundwork_app` is the only grantee. ADR 0015. The estimate points at `takeoff.id`.

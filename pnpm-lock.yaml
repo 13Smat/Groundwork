@@ -129,6 +129,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@groundwork/geo':
+        specifier: workspace:*
+        version: link:../../packages/geo
+      '@groundwork/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@groundwork/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -150,6 +156,12 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      terra-draw:
+        specifier: 1.40.0
+        version: 1.40.0
+      terra-draw-maplibre-gl-adapter:
+        specifier: 1.5.0
+        version: 1.5.0(maplibre-gl@6.19.0(@types/react@18.3.32)(react@18.3.1)(use-sync-external-store@1.7.0(react@18.3.1)))(terra-draw@1.40.0)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.5
@@ -2815,6 +2827,15 @@ packages:
 
   temporal-spec@1.0.1:
     resolution: {integrity: sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==}
+
+  terra-draw-maplibre-gl-adapter@1.5.0:
+    resolution: {integrity: sha512-wUv7WDIKln+cWkJOJZ68cOLwFhcBXlSN3GF56Dx8GLnmTTnQEZbIyzWRHjsxhn+TOXvxBOlCDl5JmCghIW3L4g==}
+    peerDependencies:
+      maplibre-gl: '>=4'
+      terra-draw: ^1.0.0
+
+  terra-draw@1.40.0:
+    resolution: {integrity: sha512-HMq/Eo0pU5nAm+KqKYYCoTChenh5PWXOFguIwIM1+w6jy7+smBElC3a7NRRqLGBb9oq/zOVZYypFUMui+JeqIA==}
 
   thread-stream@4.2.1:
     resolution: {integrity: sha512-Stg6edJXC/6/xqGwSXwFokrUhChJ18amEjpKH89WrQQ0oVFDF+pUUcTpiwWhFUrE89Vf16FBOlwhaw+lescxMQ==}
@@ -5611,6 +5632,13 @@ snapshots:
   tapable@2.3.4: {}
 
   temporal-spec@1.0.1: {}
+
+  terra-draw-maplibre-gl-adapter@1.5.0(maplibre-gl@6.19.0(@types/react@18.3.32)(react@18.3.1)(use-sync-external-store@1.7.0(react@18.3.1)))(terra-draw@1.40.0):
+    dependencies:
+      maplibre-gl: 6.19.0(@types/react@18.3.32)(react@18.3.1)(use-sync-external-store@1.7.0(react@18.3.1))
+      terra-draw: 1.40.0
+
+  terra-draw@1.40.0: {}
 
   thread-stream@4.2.1:
     dependencies:

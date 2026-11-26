@@ -31,6 +31,7 @@ import {
   insertTakeoff,
   listFeatures,
   listOverlaps,
+  listTakeoffsForJob,
   loadJob,
   locationExists,
   requireMeasurableCapture,
@@ -410,6 +411,27 @@ export async function registerTakeoffRoutes(app: ApiApp, ctx: TakeoffContext): P
         });
       });
       return reply.status(201).send(presentTakeoff(created, []));
+    },
+  );
+
+  app.get(
+    "/jobs/:id/takeoffs",
+    {
+      schema: {
+        tags: [...TENANT],
+        params: idParams,
+        response: { 200: z.object({ takeoffs: z.array(takeoffSchema) }) },
+      },
+    },
+    async (request) => {
+      return inWorkspace(request, "read", async ({ trx }) => {
+        const job = await loadJob(trx, request.params.id);
+        if (!job) {
+          throw notFound("That job was not found.");
+        }
+        const rows = await listTakeoffsForJob(trx, job.id);
+        return { takeoffs: rows.map((row) => presentTakeoff(row, [])) };
+      });
     },
   );
 

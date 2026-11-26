@@ -62,13 +62,17 @@ export type RoleRow = {
   is_system: boolean;
 };
 
+export type ApiFieldError = { message: string; path?: string };
+
 export class ApiError extends Error {
   readonly status: number;
+  readonly errors: ApiFieldError[];
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, errors: ApiFieldError[] = []) {
     super(detail);
     this.name = "ApiError";
     this.status = status;
+    this.errors = errors;
   }
 }
 
@@ -90,8 +94,18 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const response = await fetch(path, { ...init, headers, credentials: "include" });
   if (!response.ok) {
-    const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new ApiError(response.status, problem?.detail ?? "The request failed.");
+    const problem = (await response.json().catch(() => null)) as {
+      detail?: string;
+      errors?: { message?: string; path?: string }[];
+    } | null;
+    const errors = Array.isArray(problem?.errors)
+      ? problem.errors.flatMap((issue) =>
+          typeof issue.message === "string"
+            ? [{ message: issue.message, ...(issue.path ? { path: issue.path } : {}) }]
+            : [],
+        )
+      : [];
+    throw new ApiError(response.status, problem?.detail ?? "The request failed.", errors);
   }
   if (response.status === 204) {
     return undefined as T;
