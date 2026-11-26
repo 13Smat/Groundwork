@@ -1,0 +1,27 @@
+{
+  "key": "db/seed/fixtures/rgbir-source.tif",
+  "captureDate": "2026-01-15",
+  "leaf": "off",
+  "gsdCm": 775.44,
+  "bands": "RGBIR",
+  "color": {
+    "r": 220,
+    "g": 30,
+    "b": 40,
+    "nir": 180
+  },
+  "tile": {
+    "z": 16,
+    "x": 17894,
+    "y": 25791
+  },
+  "bounds": {
+    "west": -81.705322265625,
+    "south": 35.746512259919,
+    "east": -81.699829101563,
+    "north": 35.75097043945
+  },
+  "width": 64,
+  "height": 64,
+  "note": "Uncompressed 4-band GeoTIFF covering the same WebMercatorQuad tile as rgbir-cog.tif. Ingest converts it. Not a COG and not a state download."
+}

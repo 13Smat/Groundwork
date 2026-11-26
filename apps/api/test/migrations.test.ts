@@ -8,6 +8,7 @@ describe("migration files", () => {
       "0001_extensions_and_infra.sql",
       "0002_auth_workspaces.sql",
       "0003_imagery.sql",
+      "0004_imagery_ingest.sql",
     ]);
   });
 });

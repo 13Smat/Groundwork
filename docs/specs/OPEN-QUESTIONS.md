@@ -116,6 +116,20 @@ Spec 04 says to warn when a capture is older than 12 months, and to warn more st
 
 The same spec says the API issues short-lived signed tile URLs. It does not say the lifetime, or whether the browser calls TiTiler. This slice proxies. The HMAC lives for 60 seconds and is not given to the browser. `usage_event.cost_estimate_cents` for `imagery_tile` is 0. How a usage row becomes an invoice is already an open question above.
 
+## County ingest has no boundary, no tile URL, and no named role
+
+Spec 04 says ingest is county or AOI only and never statewide. It does not give a square-meter cap or a county polygon. [ADR 0008](../adr/0008-imagery-ingest.md) refuses an AOI above 60_000 km² and a FIPS code ending in `000`. A county job does not test the raster against a county boundary. The empty coverage stored while a county job is `ingesting` is replaced by the raster footprint when the job is `ready`.
+
+The same spec cites ImageServer item pages. It does not give a 4-band GeoTIFF URL template. The live fetcher downloads one HTTPS GeoTIFF from `GROUNDWORK_IMAGERY_TILE_URL` only when `GROUNDWORK_IMAGERY_LIVE_FETCH` is `1`, and it refuses Google, Mapbox, NC OneMap, ArcGIS, ImageServer, and WMS hosts. CI leaves both variables empty. The URL is operator configuration, not a guessed portal endpoint.
+
+`imagery_capture.capture_date`, `gsd_cm`, and `bands` are `not null` in the spec 01 sketch, including status `ingesting`. The worker stores provisional values and the job response omits date, GSD, bands, leaf, and `cog_key` until `ready`.
+
+Spec 04 calls the source screen internal admin and does not name a system role. Ingest and source edits require `member.role` of `owner` or `admin`. Other active roles get 403. ADR 0008.
+
+The route table does not mention `Idempotency-Key`. The builder rule requires a stored key. The same key and body return the existing job. A different body is 409. A failed job is not started again under that key.
+
+`imagery_ingest_job` is not in the spec 01 entity list. The job's `workspace_id` is the operator's workspace. A capture for a global source stays `workspace_id` null. `event_log` still has no `workspace_id`. An ingest completion is `provider = imagery_ingest` and `event_id` equal to the job id.
+
 ## Blocked imagery products are not in the provider check
 
 The spec 01 sketch limits `provider` to `nc_ortho`, `nc_helene_2025`, `naip`, `county`, `nearmap`, `vexcel`, `drone_upload`, and `other`. The blocked rows `nc_ortho_latest_viewing`, `google_satellite`, and `mapbox_satellite` are stored as `other`. The `name` column is the registry key. The sketch has no separate slug.

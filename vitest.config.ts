@@ -3,13 +3,19 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["packages/**/*.test.ts", "packages/**/*.test.tsx", "apps/**/*.test.ts"],
+    include: [
+      "packages/**/*.test.ts",
+      "packages/**/*.test.tsx",
+      "apps/**/*.test.ts",
+      "apps/**/*.test.tsx",
+    ],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
       "apps/api/test/rls.test.ts",
       "apps/api/test/auth.integration.test.ts",
       "apps/api/test/imagery.integration.test.ts",
+      "apps/api/test/imagery-ingest.integration.test.ts",
     ],
   },
 });

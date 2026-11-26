@@ -28,8 +28,13 @@ const TENANT_ROUTES = [
   "post /workspaces/{id}/invites",
   "patch /members/{id}",
   "get /catalog-items",
+  "get /admin/imagery-sources",
+  "post /admin/imagery-sources",
+  "patch /admin/imagery-sources/{sourceId}",
   "get /imagery/captures",
   "get /imagery/tiles/{captureId}/{z}/{x}/{y}",
+  "post /imagery/ingest",
+  "get /imagery/ingest/{jobId}",
 ];
 
 type Session = { cookie: string; email: string };
@@ -533,6 +538,8 @@ describe("auth and workspaces", () => {
           .replace("/workspaces/{id}", `/workspaces/${workspace.id}`)
           .replace("/members/{id}", `/members/${ownerProfile.body.memberships[0]?.id}`)
           .replace("{captureId}", createId())
+          .replace("{jobId}", createId())
+          .replace("{sourceId}", createId())
           .replace("{z}", "1")
           .replace("{x}", "0")
           .replace("{y}", "0");
@@ -546,7 +553,19 @@ describe("auth and workspaces", () => {
               ? { name: "Nope" }
               : key === "patch /members/{id}"
                 ? { status: "disabled" }
-                : undefined;
+                : key === "post /imagery/ingest"
+                  ? { sourceId: createId(), year: 2026, countyFips: "37023" }
+                  : key === "post /admin/imagery-sources"
+                    ? {
+                        provider: "other",
+                        name: "Nope",
+                        bands: "RGB",
+                        allowsTracing: false,
+                        allowsMlTraining: false,
+                      }
+                    : key === "patch /admin/imagery-sources/{sourceId}"
+                      ? { notes: "Nope" }
+                      : undefined;
         const response = await requireApp().inject({
           method: method.toUpperCase() as "GET",
           url,
